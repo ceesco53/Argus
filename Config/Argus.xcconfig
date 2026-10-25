@@ -1,0 +1,34 @@
+// Shared build settings for every Argus target.
+//
+// Argus filters connections with a Network Extension system extension. Apple only grants the
+// Network Extension and System Extension entitlements to paid Apple Developer Program teams.
+//
+//   ARGUS_FILTER_ENABLED = NO   (default) Builds and signs locally without restricted
+//                               entitlements. Argus runs as a network *monitor*: it sees and
+//                               records every connection but cannot block them.
+//   ARGUS_FILTER_ENABLED = YES  Signs with your team and the Network Extension entitlement so
+//                               the firewall filter can be installed. Set DEVELOPMENT_TEAM too.
+//
+// Bundle identifiers are unique across all Apple developers, so signed builds need a prefix of
+// your own: ARGUS_BUNDLE_PREFIX = com.example gives com.example.Argus and com.example.Argus.Filter.
+//
+// Put your overrides in Config/Local.xcconfig (git-ignored), e.g.
+//   DEVELOPMENT_TEAM = ABCDE12345
+//   ARGUS_FILTER_ENABLED = YES
+//   ARGUS_BUNDLE_PREFIX = com.example
+
+ARGUS_FILTER_ENABLED = NO
+DEVELOPMENT_TEAM =
+ARGUS_BUNDLE_PREFIX = com.argus
+
+ARGUS_SIGN_IDENTITY_NO = -
+ARGUS_SIGN_IDENTITY_YES = Apple Development
+CODE_SIGN_IDENTITY = $(ARGUS_SIGN_IDENTITY_$(ARGUS_FILTER_ENABLED))
+CODE_SIGN_STYLE = Automatic
+
+ARGUS_APP_ENTITLEMENTS_NO = Argus/Resources/ArgusMonitor.entitlements
+ARGUS_APP_ENTITLEMENTS_YES = Argus/Resources/Argus.entitlements
+ARGUS_FILTER_ENTITLEMENTS_NO = ArgusFilter/ArgusFilterLocal.entitlements
+ARGUS_FILTER_ENTITLEMENTS_YES = ArgusFilter/ArgusFilter.entitlements
+
+#include? "Local.xcconfig"

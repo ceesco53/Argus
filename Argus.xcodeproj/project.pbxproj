@@ -1,0 +1,779 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		018465284D4F96CE7D0D21D7 /* MainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18FAC5B5E93303BDDBFB4FC1 /* MainWindow.swift */; };
+		0A6853FCACE4CB0072E9368B /* ProfilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1FC1BF81D3C7A30B4D23029 /* ProfilesView.swift */; };
+		0BA6717ECE6CB8F9B00CE019 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23D971081B2182730CB0780 /* main.swift */; };
+		103626A4392CD7C309BCD6F2 /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF2AC2DCBA8828A1CC3C85AD /* SecurityView.swift */; };
+		206E60FE92CD6749A2A384DF /* MapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB721AD85110FFA80D809A83 /* MapView.swift */; };
+		24A995034C6F55DB5FBAA0A0 /* AlertView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 991E2728655874704483C423 /* AlertView.swift */; };
+		2544540007AA2792F8F4307B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A5A183F938BCB29AB14C7EF /* SettingsView.swift */; };
+		297F533A5D3B631440E29B44 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 766D499B513D46D821809F08 /* AppDelegate.swift */; };
+		30E877438349E690423641F2 /* BlocklistsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D055DA3B60FC3108D3A411E5 /* BlocklistsView.swift */; };
+		3C40B8389F47E3E306FE031F /* ArgusCLI in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = D8DF59BD0D36B0127CDDAF70 /* ArgusCLI */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		481D8084EF01D5698A529A21 /* MonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58EAE45C098A5ADCFD41A6DC /* MonitorView.swift */; };
+		4D1453BDE6F95CEB441DE001 /* MonitorEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4AA39005AEE5D627A52F23 /* MonitorEngine.swift */; };
+		50F6B25472890B2CE7A86800 /* ArgusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10818EB6FE9BF83CFC040732 /* ArgusApp.swift */; };
+		639E26268DF51D8DD142F5C4 /* NetworkWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B1EC1FEDDA27E350167D38F /* NetworkWatcher.swift */; };
+		71D7A9A6CDE6ADB86D7CCD53 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E372DDD7ACEB3928846A6300 /* MenuBarView.swift */; };
+		7DAD973268FC19094DA3DC12 /* RuleEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C695F7D2747A571B5D7BF47 /* RuleEditor.swift */; };
+		844517991607AE8C5E880264 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83AA1E4E5B245C25B7B9A72E /* OverviewView.swift */; };
+		893CDF223CF05258D7FD350C /* FilterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2E66FA5E8E33C34E87B7FDB /* FilterManager.swift */; };
+		97CF0662422444FCABEEB4AA /* FilterDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71ACE1B534654C019686FEEE /* FilterDataProvider.swift */; };
+		9814F2BED40D678AAEA4A438 /* NetworkExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B4B8F05C3EB2132491F5E533 /* NetworkExtension.framework */; };
+		98629D1FDEF4EEE0161A537E /* ArgusFilter.systemextension in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = 47DCE55F9EE1295A05A7D7D6 /* ArgusFilter.systemextension */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A23C56F0E0B91975D7C6346D /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA17483DBDEC3AB9248BC081 /* main.swift */; };
+		A35D2B8E4E3DE74BD3992932 /* RulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E25EBB920920346E7DBCB0FE /* RulesView.swift */; };
+		A35F4CB401D70046CB318C7C /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFF2B010736276EA7F871EC5 /* OnboardingView.swift */; };
+		A3C0CDAFBB4F34FEEF031ECA /* GeoLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35401880333E9393CDB2F3AE /* GeoLocator.swift */; };
+		A5F35474F5E8CCD076612C9C /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0179AA25C1A995D10783111D /* Components.swift */; };
+		A6D269D69EE6E1735952A6AA /* ArgusKit in Frameworks */ = {isa = PBXBuildFile; productRef = F95EB9125364A8B1D0C4451A /* ArgusKit */; };
+		C8C731513F14803F545C1593 /* ArgusKit in Frameworks */ = {isa = PBXBuildFile; productRef = BFADD6F4F7E320EDA1048813 /* ArgusKit */; };
+		D35C1A0AE42B8588626875B1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C46B327656627D8D71A2C84F /* Assets.xcassets */; };
+		E48772C3144799FEDA9B5B11 /* ArgusKit in Frameworks */ = {isa = PBXBuildFile; productRef = B2B3DA16B00FACBAB8B9051D /* ArgusKit */; };
+		F4D4EB44E1E274366B2B3918 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7D690E7FDFB3B76CA1B4A5B /* AppModel.swift */; };
+		F58DA670008392C060F57782 /* NettopMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21B97B7C808C144E09A7EA52 /* NettopMonitor.swift */; };
+		F8B5EFAB6F504CCEEDECC2DA /* CaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF78FCFC0AD314E8EBC40F3F /* CaptureView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		7DF4851BF6D1177D17DE69DC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7317CB3691AAD002D5B8FA9F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F77D1FD3197830E665214946;
+			remoteInfo = ArgusFilter;
+		};
+		F4961203133EFF840046CDBF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7317CB3691AAD002D5B8FA9F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6E56EBE43E35F0C18F25E564;
+			remoteInfo = ArgusCLI;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		14ECA2E8860DA6635295EC6F /* Embed System Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(SYSTEM_EXTENSIONS_FOLDER_PATH)";
+			dstSubfolderSpec = 16;
+			files = (
+				98629D1FDEF4EEE0161A537E /* ArgusFilter.systemextension in Embed System Extensions */,
+			);
+			name = "Embed System Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D505EE50A62328B49151BA9D /* Embed Dependencies */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Helpers;
+			dstSubfolderSpec = 1;
+			files = (
+				3C40B8389F47E3E306FE031F /* ArgusCLI in Embed Dependencies */,
+			);
+			name = "Embed Dependencies";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0179AA25C1A995D10783111D /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		10818EB6FE9BF83CFC040732 /* ArgusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArgusApp.swift; sourceTree = "<group>"; };
+		18FAC5B5E93303BDDBFB4FC1 /* MainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindow.swift; sourceTree = "<group>"; };
+		1B1EC1FEDDA27E350167D38F /* NetworkWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkWatcher.swift; sourceTree = "<group>"; };
+		21B97B7C808C144E09A7EA52 /* NettopMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NettopMonitor.swift; sourceTree = "<group>"; };
+		35401880333E9393CDB2F3AE /* GeoLocator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeoLocator.swift; sourceTree = "<group>"; };
+		47DCE55F9EE1295A05A7D7D6 /* ArgusFilter.systemextension */ = {isa = PBXFileReference; explicitFileType = "wrapper.system-extension"; includeInIndex = 0; path = ArgusFilter.systemextension; sourceTree = BUILT_PRODUCTS_DIR; };
+		4E4AA39005AEE5D627A52F23 /* MonitorEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonitorEngine.swift; sourceTree = "<group>"; };
+		57A985C9096BDFCC4C39255A /* Argus.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Argus.xcconfig; sourceTree = "<group>"; };
+		58EAE45C098A5ADCFD41A6DC /* MonitorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonitorView.swift; sourceTree = "<group>"; };
+		5C695F7D2747A571B5D7BF47 /* RuleEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleEditor.swift; sourceTree = "<group>"; };
+		71ACE1B534654C019686FEEE /* FilterDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterDataProvider.swift; sourceTree = "<group>"; };
+		766D499B513D46D821809F08 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		83AA1E4E5B245C25B7B9A72E /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
+		8A5A183F938BCB29AB14C7EF /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		93930D63C96333CBC93CABC7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		991E2728655874704483C423 /* AlertView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertView.swift; sourceTree = "<group>"; };
+		993038FF837D5E46395CF754 /* Argus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Argus.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1FC1BF81D3C7A30B4D23029 /* ProfilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilesView.swift; sourceTree = "<group>"; };
+		B4B8F05C3EB2132491F5E533 /* NetworkExtension.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = NetworkExtension.framework; path = System/Library/Frameworks/NetworkExtension.framework; sourceTree = SDKROOT; };
+		BFF2B010736276EA7F871EC5 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		C46B327656627D8D71A2C84F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		CB721AD85110FFA80D809A83 /* MapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapView.swift; sourceTree = "<group>"; };
+		D055DA3B60FC3108D3A411E5 /* BlocklistsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlocklistsView.swift; sourceTree = "<group>"; };
+		D7418D44A911B115827E28C0 /* ArgusKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ArgusKit; path = ArgusKit; sourceTree = SOURCE_ROOT; };
+		D7D690E7FDFB3B76CA1B4A5B /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		D8DF59BD0D36B0127CDDAF70 /* ArgusCLI */ = {isa = PBXFileReference; includeInIndex = 0; path = ArgusCLI; sourceTree = BUILT_PRODUCTS_DIR; };
+		DF2AC2DCBA8828A1CC3C85AD /* SecurityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityView.swift; sourceTree = "<group>"; };
+		DF78FCFC0AD314E8EBC40F3F /* CaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureView.swift; sourceTree = "<group>"; };
+		E23D971081B2182730CB0780 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		E25EBB920920346E7DBCB0FE /* RulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesView.swift; sourceTree = "<group>"; };
+		E372DDD7ACEB3928846A6300 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
+		F2E66FA5E8E33C34E87B7FDB /* FilterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterManager.swift; sourceTree = "<group>"; };
+		FA17483DBDEC3AB9248BC081 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		6E947E6A670C8BA8F6971395 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E48772C3144799FEDA9B5B11 /* ArgusKit in Frameworks */,
+				9814F2BED40D678AAEA4A438 /* NetworkExtension.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		83A98CACD520C318EEC5A1CC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A6D269D69EE6E1735952A6AA /* ArgusKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		89A57249F9DF63073DF9E245 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C8C731513F14803F545C1593 /* ArgusKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1DAB0DA7DB1568C152F02258 /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				D7D690E7FDFB3B76CA1B4A5B /* AppModel.swift */,
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+		2712C23DDD306584A3E3FE64 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				C46B327656627D8D71A2C84F /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		325E76CB57DF9FB54CCFB2D9 = {
+			isa = PBXGroup;
+			children = (
+				5EBA3B7DBE997BEE1E0BC4D6 /* Argus */,
+				345161AF1BAEF6759E549B57 /* ArgusCLI */,
+				C158E17EF8BBE93B47AF90DB /* ArgusFilter */,
+				8A0528ECDA1A9984389DA607 /* Config */,
+				B6D5391C69F20FB1A0674A00 /* Packages */,
+				F494E868A2AE2F17ABFC81CD /* Frameworks */,
+				47BC0BB82D5E0F1DEC663EAD /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		345161AF1BAEF6759E549B57 /* ArgusCLI */ = {
+			isa = PBXGroup;
+			children = (
+				E23D971081B2182730CB0780 /* main.swift */,
+			);
+			path = ArgusCLI;
+			sourceTree = "<group>";
+		};
+		47BC0BB82D5E0F1DEC663EAD /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				993038FF837D5E46395CF754 /* Argus.app */,
+				D8DF59BD0D36B0127CDDAF70 /* ArgusCLI */,
+				47DCE55F9EE1295A05A7D7D6 /* ArgusFilter.systemextension */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5EBA3B7DBE997BEE1E0BC4D6 /* Argus */ = {
+			isa = PBXGroup;
+			children = (
+				C6DB148AAFCDFCDA89FF048B /* App */,
+				DBDC106EAC65B5B20B1497FE /* Engine */,
+				1DAB0DA7DB1568C152F02258 /* Model */,
+				2712C23DDD306584A3E3FE64 /* Resources */,
+				93BAB8A8D25F41D7072B4882 /* Views */,
+			);
+			path = Argus;
+			sourceTree = "<group>";
+		};
+		8A0528ECDA1A9984389DA607 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				57A985C9096BDFCC4C39255A /* Argus.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		93BAB8A8D25F41D7072B4882 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				991E2728655874704483C423 /* AlertView.swift */,
+				D055DA3B60FC3108D3A411E5 /* BlocklistsView.swift */,
+				DF78FCFC0AD314E8EBC40F3F /* CaptureView.swift */,
+				0179AA25C1A995D10783111D /* Components.swift */,
+				18FAC5B5E93303BDDBFB4FC1 /* MainWindow.swift */,
+				CB721AD85110FFA80D809A83 /* MapView.swift */,
+				E372DDD7ACEB3928846A6300 /* MenuBarView.swift */,
+				58EAE45C098A5ADCFD41A6DC /* MonitorView.swift */,
+				BFF2B010736276EA7F871EC5 /* OnboardingView.swift */,
+				83AA1E4E5B245C25B7B9A72E /* OverviewView.swift */,
+				B1FC1BF81D3C7A30B4D23029 /* ProfilesView.swift */,
+				5C695F7D2747A571B5D7BF47 /* RuleEditor.swift */,
+				E25EBB920920346E7DBCB0FE /* RulesView.swift */,
+				DF2AC2DCBA8828A1CC3C85AD /* SecurityView.swift */,
+				8A5A183F938BCB29AB14C7EF /* SettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		B6D5391C69F20FB1A0674A00 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				D7418D44A911B115827E28C0 /* ArgusKit */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		C158E17EF8BBE93B47AF90DB /* ArgusFilter */ = {
+			isa = PBXGroup;
+			children = (
+				71ACE1B534654C019686FEEE /* FilterDataProvider.swift */,
+				93930D63C96333CBC93CABC7 /* Info.plist */,
+				FA17483DBDEC3AB9248BC081 /* main.swift */,
+			);
+			path = ArgusFilter;
+			sourceTree = "<group>";
+		};
+		C6DB148AAFCDFCDA89FF048B /* App */ = {
+			isa = PBXGroup;
+			children = (
+				766D499B513D46D821809F08 /* AppDelegate.swift */,
+				10818EB6FE9BF83CFC040732 /* ArgusApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		DBDC106EAC65B5B20B1497FE /* Engine */ = {
+			isa = PBXGroup;
+			children = (
+				F2E66FA5E8E33C34E87B7FDB /* FilterManager.swift */,
+				35401880333E9393CDB2F3AE /* GeoLocator.swift */,
+				4E4AA39005AEE5D627A52F23 /* MonitorEngine.swift */,
+				21B97B7C808C144E09A7EA52 /* NettopMonitor.swift */,
+				1B1EC1FEDDA27E350167D38F /* NetworkWatcher.swift */,
+			);
+			path = Engine;
+			sourceTree = "<group>";
+		};
+		F494E868A2AE2F17ABFC81CD /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				B4B8F05C3EB2132491F5E533 /* NetworkExtension.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		002B50BE8863B8871A1A0A2C /* Argus */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FF0C19A31823396699079CE5 /* Build configuration list for PBXNativeTarget "Argus" */;
+			buildPhases = (
+				004BE561CD917026C622A9E8 /* Sources */,
+				5538503E25796E8F402C665E /* Resources */,
+				89A57249F9DF63073DF9E245 /* Frameworks */,
+				14ECA2E8860DA6635295EC6F /* Embed System Extensions */,
+				D505EE50A62328B49151BA9D /* Embed Dependencies */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C31D8A06E7C8AD5C4097CDF6 /* PBXTargetDependency */,
+				008C1E97D0A62A2CD60E1F8A /* PBXTargetDependency */,
+			);
+			name = Argus;
+			packageProductDependencies = (
+				BFADD6F4F7E320EDA1048813 /* ArgusKit */,
+			);
+			productName = Argus;
+			productReference = 993038FF837D5E46395CF754 /* Argus.app */;
+			productType = "com.apple.product-type.application";
+		};
+		6E56EBE43E35F0C18F25E564 /* ArgusCLI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 362B8351331ECC6DE56980B7 /* Build configuration list for PBXNativeTarget "ArgusCLI" */;
+			buildPhases = (
+				F14A8BED308978463C32D4EB /* Sources */,
+				83A98CACD520C318EEC5A1CC /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ArgusCLI;
+			packageProductDependencies = (
+				F95EB9125364A8B1D0C4451A /* ArgusKit */,
+			);
+			productName = ArgusCLI;
+			productReference = D8DF59BD0D36B0127CDDAF70 /* ArgusCLI */;
+			productType = "com.apple.product-type.tool";
+		};
+		F77D1FD3197830E665214946 /* ArgusFilter */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 87148DB4C10C520D1A073A49 /* Build configuration list for PBXNativeTarget "ArgusFilter" */;
+			buildPhases = (
+				81660FF1613BA6E6B46E81BE /* Sources */,
+				6E947E6A670C8BA8F6971395 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ArgusFilter;
+			packageProductDependencies = (
+				B2B3DA16B00FACBAB8B9051D /* ArgusKit */,
+			);
+			productName = ArgusFilter;
+			productReference = 47DCE55F9EE1295A05A7D7D6 /* ArgusFilter.systemextension */;
+			productType = "com.apple.product-type.system-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		7317CB3691AAD002D5B8FA9F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					002B50BE8863B8871A1A0A2C = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					6E56EBE43E35F0C18F25E564 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					F77D1FD3197830E665214946 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 3B224A7D049AF079B1F594AC /* Build configuration list for PBXProject "Argus" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 325E76CB57DF9FB54CCFB2D9;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F5B04D4F3599173FAD822F53 /* XCLocalSwiftPackageReference "ArgusKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 47BC0BB82D5E0F1DEC663EAD /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				002B50BE8863B8871A1A0A2C /* Argus */,
+				F77D1FD3197830E665214946 /* ArgusFilter */,
+				6E56EBE43E35F0C18F25E564 /* ArgusCLI */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5538503E25796E8F402C665E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D35C1A0AE42B8588626875B1 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		004BE561CD917026C622A9E8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				24A995034C6F55DB5FBAA0A0 /* AlertView.swift in Sources */,
+				297F533A5D3B631440E29B44 /* AppDelegate.swift in Sources */,
+				F4D4EB44E1E274366B2B3918 /* AppModel.swift in Sources */,
+				50F6B25472890B2CE7A86800 /* ArgusApp.swift in Sources */,
+				30E877438349E690423641F2 /* BlocklistsView.swift in Sources */,
+				F8B5EFAB6F504CCEEDECC2DA /* CaptureView.swift in Sources */,
+				A5F35474F5E8CCD076612C9C /* Components.swift in Sources */,
+				893CDF223CF05258D7FD350C /* FilterManager.swift in Sources */,
+				A3C0CDAFBB4F34FEEF031ECA /* GeoLocator.swift in Sources */,
+				018465284D4F96CE7D0D21D7 /* MainWindow.swift in Sources */,
+				206E60FE92CD6749A2A384DF /* MapView.swift in Sources */,
+				71D7A9A6CDE6ADB86D7CCD53 /* MenuBarView.swift in Sources */,
+				4D1453BDE6F95CEB441DE001 /* MonitorEngine.swift in Sources */,
+				481D8084EF01D5698A529A21 /* MonitorView.swift in Sources */,
+				F58DA670008392C060F57782 /* NettopMonitor.swift in Sources */,
+				639E26268DF51D8DD142F5C4 /* NetworkWatcher.swift in Sources */,
+				A35F4CB401D70046CB318C7C /* OnboardingView.swift in Sources */,
+				844517991607AE8C5E880264 /* OverviewView.swift in Sources */,
+				0A6853FCACE4CB0072E9368B /* ProfilesView.swift in Sources */,
+				7DAD973268FC19094DA3DC12 /* RuleEditor.swift in Sources */,
+				A35D2B8E4E3DE74BD3992932 /* RulesView.swift in Sources */,
+				103626A4392CD7C309BCD6F2 /* SecurityView.swift in Sources */,
+				2544540007AA2792F8F4307B /* SettingsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		81660FF1613BA6E6B46E81BE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				97CF0662422444FCABEEB4AA /* FilterDataProvider.swift in Sources */,
+				A23C56F0E0B91975D7C6346D /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F14A8BED308978463C32D4EB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0BA6717ECE6CB8F9B00CE019 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		008C1E97D0A62A2CD60E1F8A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6E56EBE43E35F0C18F25E564 /* ArgusCLI */;
+			targetProxy = F4961203133EFF840046CDBF /* PBXContainerItemProxy */;
+		};
+		C31D8A06E7C8AD5C4097CDF6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F77D1FD3197830E665214946 /* ArgusFilter */;
+			targetProxy = 7DF4851BF6D1177D17DE69DC /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		197693D9BA3FA21AC24B2984 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "$(ARGUS_FILTER_ENTITLEMENTS_$(ARGUS_FILTER_ENABLED))";
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = ArgusFilter/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ARGUS_BUNDLE_PREFIX).Argus.Filter";
+				PRODUCT_MODULE_NAME = ArgusFilter;
+				PRODUCT_NAME = "$(PRODUCT_BUNDLE_IDENTIFIER)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+		37B4DCD4090B0C890CB28299 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "$(ARGUS_FILTER_ENTITLEMENTS_$(ARGUS_FILTER_ENABLED))";
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = ArgusFilter/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ARGUS_BUNDLE_PREFIX).Argus.Filter";
+				PRODUCT_MODULE_NAME = ArgusFilter;
+				PRODUCT_NAME = "$(PRODUCT_BUNDLE_IDENTIFIER)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		78367CEE52DB8E956CB1D67F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				INFOPLIST_FILE = ArgusCLI/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ARGUS_BUNDLE_PREFIX).Argus.cli";
+				PRODUCT_NAME = argus;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+		817E98607284AC7FDD69D7AF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 57A985C9096BDFCC4C39255A /* Argus.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 6;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		8F1EEB092C4B331A73785B3A /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 57A985C9096BDFCC4C39255A /* Argus.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 6;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		8F63EB8A1C83C7D68A1F74D4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "$(ARGUS_APP_ENTITLEMENTS_$(ARGUS_FILTER_ENABLED))";
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Argus/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ARGUS_BUNDLE_PREFIX).Argus";
+				PRODUCT_NAME = Argus;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		BF559AE3A11F2C9BDD07A311 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "$(ARGUS_APP_ENTITLEMENTS_$(ARGUS_FILTER_ENABLED))";
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Argus/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ARGUS_BUNDLE_PREFIX).Argus";
+				PRODUCT_NAME = Argus;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		F9F497374FBE7D3F3FFCF774 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				INFOPLIST_FILE = ArgusCLI/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ARGUS_BUNDLE_PREFIX).Argus.cli";
+				PRODUCT_NAME = argus;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		362B8351331ECC6DE56980B7 /* Build configuration list for PBXNativeTarget "ArgusCLI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F9F497374FBE7D3F3FFCF774 /* Debug */,
+				78367CEE52DB8E956CB1D67F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		3B224A7D049AF079B1F594AC /* Build configuration list for PBXProject "Argus" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				817E98607284AC7FDD69D7AF /* Debug */,
+				8F1EEB092C4B331A73785B3A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		87148DB4C10C520D1A073A49 /* Build configuration list for PBXNativeTarget "ArgusFilter" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				37B4DCD4090B0C890CB28299 /* Debug */,
+				197693D9BA3FA21AC24B2984 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FF0C19A31823396699079CE5 /* Build configuration list for PBXNativeTarget "Argus" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BF559AE3A11F2C9BDD07A311 /* Debug */,
+				8F63EB8A1C83C7D68A1F74D4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		F5B04D4F3599173FAD822F53 /* XCLocalSwiftPackageReference "ArgusKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ArgusKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B2B3DA16B00FACBAB8B9051D /* ArgusKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ArgusKit;
+		};
+		BFADD6F4F7E320EDA1048813 /* ArgusKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ArgusKit;
+		};
+		F95EB9125364A8B1D0C4451A /* ArgusKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ArgusKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 7317CB3691AAD002D5B8FA9F /* Project object */;
+}
