@@ -44,6 +44,12 @@ xcodebuild -exportArchive -archivePath "$out/Argus.xcarchive" -exportPath "$out/
   -exportOptionsPlist "$out/ExportOptions.plist" -allowProvisioningUpdates | tail -1
 app="$out/export/Argus.app"
 
+# Don't publish a build that can't install its network filter or can't find its update feed.
+codesign -d --entitlements - --xml "$app" 2>/dev/null | grep -q content-filter-provider \
+  || fail "the exported app lacks the network filter entitlement; check the ARGUS_* switches in Config/Local.xcconfig"
+feed_url=$(/usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$app/Contents/Info.plist" 2>/dev/null || true)
+[[ "$feed_url" == https://*/appcast.xml ]] || fail "the update feed address is '$feed_url'; run scripts/setup-updates.sh again"
+
 echo "==> Notarizing"
 ditto -c -k --keepParent "$app" "$out/notarize.zip"
 xcrun notarytool submit "$out/notarize.zip" --keychain-profile "$notary_profile" --wait
