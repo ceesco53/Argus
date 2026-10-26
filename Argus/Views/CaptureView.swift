@@ -111,13 +111,15 @@ struct CaptureView: View {
 
 private struct CaptureRow: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let session: CaptureSession
 
     var body: some View {
         HStack(spacing: 12) {
             if session.isActive {
                 Circle().fill(.red).frame(width: 10, height: 10)
-                    .phaseAnimator([1.0, 0.3]) { content, phase in content.opacity(phase) } animation: { _ in .easeInOut(duration: 0.8) }
+                    .phaseAnimator(reduceMotion ? [1.0] : [1.0, 0.3]) { content, phase in content.opacity(phase) } animation: { _ in .easeInOut(duration: 0.8) }
+                    .accessibilityLabel("Recording")
             } else {
                 Image(systemName: "doc.badge.ellipsis").foregroundStyle(.secondary)
             }

@@ -7,6 +7,7 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             Tab("General", systemImage: "gearshape") { GeneralSettings() }
+            Tab("Notifications", systemImage: "bell") { NotificationSettings() }
             Tab("Protection", systemImage: "shield") { ProtectionSettings() }
             Tab("Alerts", systemImage: "bell.badge") { AlertSettings() }
             Tab("Network Filter", systemImage: "network.badge.shield.half.filled") { FilterSettings() }
@@ -37,7 +38,6 @@ private struct EngineToggle: View {
 
 private struct GeneralSettings: View {
     @AppStorage("showRateInMenuBar") private var showRate = false
-    @AppStorage("notifyWarnings") private var notifyWarnings = true
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
@@ -55,9 +55,11 @@ private struct GeneralSettings: View {
                 }
             }
             Toggle("Show the current data rate in the menu bar", isOn: $showRate)
-            Toggle(isOn: $notifyWarnings) {
-                Text("Notify me about security warnings")
-                Text("Packet sniffers, changed code signatures and failed blocklist updates.")
+            CloudSyncToggle()
+            if Updater.shared.isConfigured {
+                Toggle("Check for updates automatically", isOn: Binding(
+                    get: { Updater.shared.checksAutomatically }, set: { Updater.shared.checksAutomatically = $0 }))
+                Button("Check for Updates…") { Updater.shared.checkForUpdates() }
             }
             Button("Show the Welcome Guide Again") {
                 hasCompletedOnboarding = false
@@ -100,6 +102,8 @@ private struct ProtectionSettings: View {
 private struct AlertSettings: View {
     @Environment(AppModel.self) private var model
     @AppStorage("alertDefaultDuration") private var defaultDuration = "forever"
+    @AppStorage("quietWhenBusy") private var quietWhenBusy = true
+    @AppStorage("pauseForWiFiSignIn") private var pauseForWiFiSignIn = true
 
     enum TimeoutChoice: Hashable { case deny, allow, followOrDeny, followOrAllow }
 
@@ -151,10 +155,86 @@ private struct AlertSettings: View {
                              detail: "Argus weighs HaGeZi's threat and tracker lists (downloaded daily, about 15 MB, used only for advice), who made the app, and your earlier answers.",
                              keyPath: \.suggestAnswers)
             }
+            Section("Learning period") {
+                if let until = model.learningUntil {
+                    LabeledContent("Learning until", value: until.formatted(date: .abbreviated, time: .shortened))
+                    HStack {
+                        Button("Review Apps…") {
+                            model.showReview = true
+                            AppDelegate.showMainWindow()
+                        }
+                        Button("End Learning Now") { Task { await model.endLearning() } }
+                    }
+                } else {
+                    Text("Allow unknown connections quietly for a few days, then review every app at once. Useful after installing Argus or setting up a new Mac.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    HStack {
+                        Button("Learn for 3 Days") { Task { await model.startLearning(days: 3) } }
+                        Button("Learn for a Week") { Task { await model.startLearning(days: 7) } }
+                    }
+                }
+            }
+            Section("While I'm busy") {
+                Toggle(isOn: $quietWhenBusy) {
+                    Text("No alerts during calls or while the screen is locked")
+                    Text("Unknown connections follow a confident suggestion, otherwise the choice below. They're kept for review.")
+                }
+                .onChange(of: quietWhenBusy) { model.busy.refresh() }
+                Picker("Otherwise", selection: Binding(get: { model.state.settings.busyAction },
+                                                       set: { value in Task { await model.updateSettings { $0.busyAction = value } } })) {
+                    Text("Allow, and let me review later").tag(RuleAction.allow)
+                    Text("Deny, and let me review later").tag(RuleAction.deny)
+                }
+                .disabled(!quietWhenBusy)
+                Toggle(isOn: $pauseForWiFiSignIn) {
+                    Text("Pause for Wi-Fi sign-in pages")
+                    Text("When a hotel or airport network needs you to sign in, pause protection for 5 minutes.")
+                }
+            }
             Section {
-                Text("Alerts appear in a small floating window and never take focus away from what you're doing. Press Return to allow or ⌘⌫ to deny.")
+                Text("Alerts appear in a small floating window and never take focus away from what you're doing. Press Return for the suggested answer or ⌘⌫ to deny.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+private struct NotificationSettings: View {
+    @Environment(AppModel.self) private var model
+    @AppStorage("notifyForegroundBlocks") private var foregroundBlocks = true
+    @AppStorage("notifyWarnings") private var warnings = true
+    @AppStorage("weeklyReport") private var weeklyReport = true
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle(isOn: $foregroundBlocks) {
+                    Text("When Argus blocks the app I'm using")
+                    Text("So you know right away when a block might be why something isn't working.")
+                }
+                Toggle(isOn: $warnings) {
+                    Text("Security warnings")
+                    Text("Packet sniffers, changed code signatures, failed blocklist updates and heavy data use.")
+                }
+                Toggle(isOn: $weeklyReport) {
+                    Text("Weekly report")
+                    Text("A short summary every Monday morning: what was blocked and which apps are new.")
+                }
+            }
+            Section("Data usage") {
+                Picker("Warn when one app uses more than", selection: Binding(
+                    get: { model.state.settings.dataUsageWarningMB },
+                    set: { value in Task { await model.updateSettings { $0.dataUsageWarningMB = value } } })) {
+                    Text("Never").tag(0)
+                    Text("250 MB a day").tag(250)
+                    Text("500 MB a day").tag(500)
+                    Text("1 GB a day").tag(1024)
+                    Text("5 GB a day").tag(5120)
+                    Text("10 GB a day").tag(10_240)
+                }
             }
         }
         .formStyle(.grouped)
@@ -329,5 +409,33 @@ private struct BackupSettings: View {
         guard let url = pendingImport else { return }
         pendingImport = nil
         Task { await model.importBackup(from: url, merge: merge) }
+    }
+}
+
+private struct CloudSyncToggle: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let cloud = model.cloud
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: Binding(get: { cloud.isEnabled && cloud.availability == .available }, set: { cloud.setEnabled($0) })) {
+                Text("Sync rules with iCloud")
+                Text(detail(cloud))
+            }
+            .disabled(cloud.availability != .available)
+            if let problem = cloud.problem {
+                Text(problem).font(.caption).foregroundStyle(.orange)
+            }
+        }
+    }
+
+    private func detail(_ cloud: CloudSync) -> String {
+        switch cloud.availability {
+        case .notEntitled: "Needs a build signed with iCloud key-value storage (a developer team build)."
+        case .signedOut: "Sign in to iCloud in System Settings to sync rules between your Macs."
+        case .available:
+            if let synced = cloud.lastSynced { "Rules, profiles and blocklists stay the same on your Macs. Last synced \(synced.relative)." }
+            else { "Rules, profiles and blocklists stay the same on all your Macs. Temporary rules and settings stay on each Mac." }
+        }
     }
 }

@@ -20,6 +20,9 @@ public extension VerdictReason {
         case .localNetwork: return "Local network traffic"
         case .protectionOff: return "Protection was off"
         case .paused: return "Protection was paused"
+        case .learning: return "Allowed during the learning period"
+        case .deferred: return "Decided while you were busy"
+        case .argus: return "Argus itself"
         case .signatureMismatch: return "Code signature no longer matches the rule"
         case .observed: return "Observed only (monitor mode)"
         }

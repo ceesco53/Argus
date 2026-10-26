@@ -75,6 +75,7 @@ struct VerdictBadge: View {
             .padding(.vertical, compact ? 0 : 2)
             .background(compact ? .clear : color.opacity(0.13), in: Capsule())
             .help(text)
+            .accessibilityLabel(text)
     }
 
     private var style: (String, String, Color) {
@@ -214,6 +215,7 @@ struct StatTile: View {
             }
         }
         .card()
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -252,6 +254,7 @@ struct TrafficChart: View {
         }
         .frame(height: height)
         .accessibilityLabel("Network traffic chart")
+        .accessibilityValue("Received \(Formatting.bytes(buckets.reduce(0) { $0 + $1.bytesIn })), sent \(Formatting.bytes(buckets.reduce(0) { $0 + $1.bytesOut }))")
     }
 
     private func perSecond(_ bytes: UInt64) -> Double { Double(bytes) / Double(resolution.seconds) }
@@ -312,6 +315,8 @@ struct RateLabel: View {
         }
         .labelStyle(TightLabelStyle())
         .font(.caption.monospacedDigit())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Receiving \(Formatting.rate(rate.bytesInPerSecond)), sending \(Formatting.rate(rate.bytesOutPerSecond))")
     }
 }
 
@@ -490,6 +495,140 @@ struct BlockedRow: View {
             .menuStyle(.button)
             .controlSize(.small)
             .fixedSize()
+        }
+    }
+}
+
+// MARK: - Undo messages
+
+/// "Allowed Safari → news.google.com · Undo", shown briefly after a change.
+struct ToastView: View {
+    let toast: Toast
+    let model: AppModel
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: toast.changeID == nil ? "checkmark.circle.fill" : "arrow.uturn.backward.circle.fill")
+                .foregroundStyle(toast.changeID == nil ? Color.allowed : Color.accentColor)
+            Text(toast.message).lineLimit(2)
+            if let id = toast.changeID {
+                Button("Undo") { Task { await model.undo(id) } }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
+            Button {
+                model.dismissToast()
+            } label: {
+                Image(systemName: "xmark").font(.caption.weight(.bold))
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Dismiss")
+        }
+        .font(.callout)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(.separator))
+        .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .accessibilityElement(children: .contain)
+    }
+}
+
+// MARK: - Banners
+
+/// Shown when the internet or DNS isn't working, or a Wi-Fi sign-in page is in the way.
+struct HealthBanner: View {
+    @Environment(AppModel.self) private var model
+    var compact = false
+
+    var body: some View {
+        let status = model.health.status
+        if status.isProblem {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: symbol(status)).font(compact ? .title3 : .title2).foregroundStyle(tint(status))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title(status)).font(compact ? .callout.weight(.semibold) : .headline)
+                    if !compact {
+                        Text(detail(status)).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 6) {
+                    switch status {
+                    case .argusBlockingDNS:
+                        Button("Pause 5 Minutes") { Task { await model.pause(minutes: 5) } }
+                            .buttonStyle(.borderedProminent).tint(.orange)
+                        Button("Troubleshoot") { model.troubleshoot(appPath: nil) }
+                    case .captivePortal:
+                        Button("Open Sign-In Page") {
+                            if let url = URL(string: "http://captive.apple.com") { NSWorkspace.shared.open(url) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    default:
+                        Button("Check Again") { Task { await model.checkHealth() } }
+                    }
+                }
+                .controlSize(compact ? .small : .regular)
+            }
+            .padding(compact ? 10 : 14)
+            .background(tint(status).opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    private func symbol(_ status: HealthMonitor.Status) -> String {
+        switch status {
+        case .captivePortal: "wifi.exclamationmark"
+        case .argusBlockingDNS: "exclamationmark.shield.fill"
+        default: "network.slash"
+        }
+    }
+
+    private func tint(_ status: HealthMonitor.Status) -> Color { status == .captivePortal ? .accentColor : .orange }
+
+    private func title(_ status: HealthMonitor.Status) -> String {
+        switch status {
+        case .argusBlockingDNS: "Argus may be blocking your internet"
+        case .captivePortal: "This Wi-Fi network wants you to sign in"
+        case .dnsFailing: "Your Mac can't look up websites"
+        case .offline: "Your Mac can't reach the internet"
+        default: ""
+        }
+    }
+
+    private func detail(_ status: HealthMonitor.Status) -> String {
+        switch status {
+        case .argusBlockingDNS: "DNS lookups are failing and Argus blocked DNS traffic in the last few minutes, so websites may not load."
+        case .captivePortal: "Sign in on the network's page. Argus pauses protection for a few minutes while you do (you can change this in Settings)."
+        case .dnsFailing: "Name lookups are failing, but Argus hasn't blocked any DNS traffic. The network or its DNS server is likely the cause."
+        case .offline: "Websites don't answer. This doesn't look like Argus's doing; check the network connection."
+        default: ""
+        }
+    }
+}
+
+/// While the learning period runs: what it does, when it ends, and the way out.
+struct LearningBanner: View {
+    @Environment(AppModel.self) private var model
+    var compact = false
+
+    var body: some View {
+        if let until = model.learningUntil {
+            HStack(spacing: 10) {
+                Image(systemName: "graduationcap.fill").font(compact ? .title3 : .title2).foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Learning what your apps do").font(compact ? .callout.weight(.semibold) : .headline)
+                    Text("No alerts until \(until.formatted(date: .abbreviated, time: .shortened)). \(model.reviewItems.count) app\(model.reviewItems.count == 1 ? "" : "s") to review so far.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Review Now") { model.showReview = true }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(compact ? .small : .regular)
+            }
+            .padding(compact ? 10 : 14)
+            .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
     }
 }

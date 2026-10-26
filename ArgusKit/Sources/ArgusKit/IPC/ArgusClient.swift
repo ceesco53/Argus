@@ -163,6 +163,21 @@ public extension ArgusClient {
         return value
     }
 
+    func test(_ connection: ConnectionTest) async throws -> ConnectionTestResult {
+        guard case .test(let value) = try await call(.testConnection(connection)) else { throw ArgusError.failed("Unexpected response") }
+        return value
+    }
+
+    func recentChanges() async throws -> [ChangeRecord] {
+        guard case .changes(let value) = try await call(.recentChanges) else { throw ArgusError.failed("Unexpected response") }
+        return value
+    }
+
+    func digest(days: Int) async throws -> Digest {
+        guard case .digest(let value) = try await call(.digest(days: days)) else { throw ArgusError.failed("Unexpected response") }
+        return value
+    }
+
     func network(_ request: ArgusRequest) async throws -> NetworkReport {
         guard case .network(let value) = try await call(request) else { throw ArgusError.failed("Unexpected response") }
         return value

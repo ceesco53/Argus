@@ -10,7 +10,7 @@ struct AlertView: View {
 
     var body: some View {
         Group {
-            if let alert = model.alerts.first {
+            if let alert = model.focusedAlert {
                 AlertContent(alert: alert, waiting: model.alerts.count - 1)
                     .id(alert.id) // fresh choices for every alert
             } else {
@@ -66,6 +66,7 @@ private struct AlertContent: View {
                     .font(.callout)
             }
             footer
+            if waiting > 0 { WaitingAlerts(current: alert) }
         }
         .padding(22)
         .frame(width: 470)
@@ -350,6 +351,57 @@ private struct AdviceBanner: View {
         case .deny: ("hand.raised.fill", .denied)
         case .allow: ("hand.thumbsup.fill", .allowed)
         case nil: ("questionmark.circle.fill", .secondary)
+        }
+    }
+}
+
+/// The other alerts, grouped by app, with one-click answers for a whole app.
+private struct WaitingAlerts: View {
+    @Environment(AppModel.self) private var model
+    let current: ConnectionAlert
+
+    var body: some View {
+        let others = model.alerts.filter { $0.id != current.id }
+        let groups = Dictionary(grouping: others, by: \.process.path)
+            .map { (path: $0.key, alerts: $0.value) }
+            .sorted { $0.alerts.count > $1.alerts.count }
+        VStack(alignment: .leading, spacing: 8) {
+            Divider()
+            HStack {
+                Text("Also waiting").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Spacer()
+                if others.count >= 3, model.learningUntil == nil {
+                    Button("Too many alerts? Learn quietly for 3 days") { Task { await model.startLearning(days: 3) } }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                        .help("Allows unknown connections without asking for 3 days, then lets you review every app at once")
+                }
+            }
+            ForEach(groups.prefix(4), id: \.path) { group in
+                let process = group.alerts[0].process
+                let hosts = group.alerts.map(\.remoteDisplay)
+                HStack(spacing: 8) {
+                    AppIconView(identity: process, size: 22)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("\(process.name) · \(group.alerts.count)").font(.callout.weight(.medium))
+                        Text(hosts.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer(minLength: 6)
+                    Button("Show") { model.focusedAlertID = group.alerts[0].id }
+                    Menu("Answer All") {
+                        Button("Allow These \(hosts.count) Servers") { Task { await model.answerAll(from: group.path, action: .allow, anywhere: false) } }
+                        Button("Deny These \(hosts.count) Servers") { Task { await model.answerAll(from: group.path, action: .deny, anywhere: false) } }
+                        Divider()
+                        Button("Allow \(process.name) to Connect Anywhere") { Task { await model.answerAll(from: group.path, action: .allow, anywhere: true) } }
+                        Button("Block \(process.name) Everywhere") { Task { await model.answerAll(from: group.path, action: .deny, anywhere: true) } }
+                    }
+                    .fixedSize()
+                }
+                .controlSize(.small)
+            }
+            if groups.count > 4 {
+                Text("and \(groups.count - 4) more apps").font(.caption).foregroundStyle(.tertiary)
+            }
         }
     }
 }

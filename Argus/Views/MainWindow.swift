@@ -25,6 +25,9 @@ struct MainWindow: View {
                     row(.security, badge: model.bpfUsers.count)
                     row(.capture)
                 }
+                Section("Help") {
+                    row(.troubleshoot, badge: model.health.status.isProblem ? 1 : 0)
+                }
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
             .safeAreaInset(edge: .bottom) { SidebarStatus().padding(10) }
@@ -39,6 +42,7 @@ struct MainWindow: View {
                 case .profiles: ProfilesView()
                 case .security: SecurityView()
                 case .capture: CaptureView()
+                case .troubleshoot: TroubleshootView()
                 }
             }
             .frame(minWidth: 640, minHeight: 480)
@@ -48,6 +52,15 @@ struct MainWindow: View {
                 LockButton()
             }
         }
+        .overlay(alignment: .bottom) {
+            if let toast = model.toast {
+                ToastView(toast: toast, model: model).padding(.bottom, 22)
+            }
+        }
+        .animation(.snappy, value: model.toast)
+        .sheet(isPresented: $model.showReview) { ReviewView().environment(model) }
+        .sheet(isPresented: $model.showDigest) { DigestView().environment(model) }
+        .sheet(isPresented: $model.showChanges) { RecentChangesView().environment(model) }
         .sheet(isPresented: $showOnboarding) {
             OnboardingView { showOnboarding = false }
                 .environment(model)

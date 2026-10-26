@@ -6,6 +6,24 @@ a world map, rules, profiles, community blocklists, packet capture and a command
 
 ![icon](Argus/Resources/Assets.xcassets/AppIcon.appiconset/icon_256x256.png)
 
+## Highlights
+
+- **A calm start.** A learning period quietly records what your apps do for a few days, then a single
+  review screen lets you trust or block each app, instead of a flood of alerts on day one.
+- **Alerts that help you decide.** Each alert suggests an answer and says why; waiting alerts are grouped
+  by app so you can answer an app's alerts at once.
+- **Never interrupts a call.** During video calls, or while the screen is locked, Argus decides on its own
+  (following a confident suggestion) and keeps the decisions for review.
+- **Something not working?** The troubleshooter shows what Argus blocked for the app you're using and
+  checks what it would do with any website; notifications tell you when the app in front was blocked.
+- **Undo.** Every change to rules, profiles, blocklists and settings can be undone, from a message
+  right after the change or from Recent Changes (⌥⌘Z undoes the latest).
+- **Health checks.** Argus notices when DNS or the internet stops working, says whether it's the cause,
+  and pauses itself while you sign in to hotel or airport Wi-Fi.
+- **Pause** for 1, 5, 30 or 60 minutes from the menu bar, Control Center, Shortcuts or `argus pause`.
+- **Weekly report** and **data usage warnings**, desktop **widgets**, Siri and Shortcuts actions, and
+  **iCloud sync** of rules between your Macs.
+
 ## Two ways Argus runs
 
 | | Monitor mode | Filter mode |
@@ -51,6 +69,8 @@ teams, so the firewall needs your team:
    xcodebuild -scheme Argus -configuration Release -destination 'platform=macOS' \
      -derivedDataPath build/DerivedData -allowProvisioningUpdates build
    ```
+   For iCloud sync of rules, also set `ARGUS_ICLOUD_ENABLED = YES` once Xcode is signed in to your
+   developer account, so automatic signing can add the iCloud capability.
 3. Move `Argus.app` to `/Applications` (macOS only loads system extensions from there), open it,
    click **Install Filter** and allow it in System Settings › General › Login Items & Extensions.
 
@@ -125,6 +145,10 @@ argus log --follow
 argus blocked                               # what was blocked recently, and why
 argus allow news.google.com                 # always allow a host (add --domain or --process NAME)
 argus pause 5m && argus resume              # allow everything for a while
+argus learn 3d                              # quiet learning period, then review in the app
+argus test news.google.com --process Safari # what would happen, and why
+argus changes && argus undo                 # recent changes; undo the latest
+argus report --days 7                       # blocked, most-blocked domains, new apps
 sudo argus capture start --process curl --seconds 30 && argus capture save <id> out.pcap
 argus backup argus.json && argus restore argus.json --merge
 argus lock                                  # changes now need an administrator (or root)
@@ -145,9 +169,32 @@ Debug builds accept launch arguments for working on the UI without the filter:
 |---|---|
 | `-ArgusDebugSection monitor` | Opens the main window on that section (`overview`, `monitor`, `map`, `rules`, `blocklists`, `profiles`, `security`, `capture`) |
 | `-ArgusDebugAlert YES` | Shows a sample connection alert |
-| `-ArgusDebugMenu YES` | Shows the status menu's content in a normal window |
 | `-ArgusDebugDownloadLocation YES` | Downloads the location database at launch |
+| `-ArgusDebugMenu YES` | Shows the status menu's content in a normal window |
 | `-hasCompletedOnboarding YES` | Skips the welcome guide |
+
+## Releasing
+
+Releases are signed with Developer ID, notarized, and published on GitHub Releases with a Sparkle
+update feed, so installed copies update themselves.
+
+One-time setup:
+
+1. In Xcode › Settings › Accounts › Manage Certificates, add a **Developer ID Application** certificate.
+2. Store notarization credentials (an [app-specific password](https://support.apple.com/102654)):
+   ```sh
+   xcrun notarytool store-credentials argus-notary --apple-id YOUR_APPLE_ID --team-id YOUR_TEAM_ID
+   ```
+3. Create the update-signing key and configure the feed:
+   ```sh
+   scripts/setup-updates.sh
+   ```
+   The private key stays in your login Keychain; back it up as the script describes. Losing it means
+   existing installs can't verify future updates.
+
+For each release, raise `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `project.yml`, commit,
+then run `scripts/release.sh`. It archives, exports with Developer ID, notarizes and staples, signs
+the update and writes `appcast.xml`, and creates the GitHub release with both attached.
 
 ## Privacy
 

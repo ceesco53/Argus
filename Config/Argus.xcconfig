@@ -16,8 +16,17 @@
 //   DEVELOPMENT_TEAM = ABCDE12345
 //   ARGUS_FILTER_ENABLED = YES
 //   ARGUS_BUNDLE_PREFIX = com.example
+//
+// iCloud sync of rules needs the iCloud capability on the app's identifier. With Xcode signed in
+// to your developer account, set ARGUS_ICLOUD_ENABLED = YES and build once with automatic
+// signing (or -allowProvisioningUpdates) so Xcode adds it.
+
+// Automatic updates (Sparkle) stay off unless both are set; scripts/setup-updates.sh fills them in.
+ARGUS_UPDATE_FEED_URL =
+ARGUS_UPDATE_PUBLIC_KEY =
 
 ARGUS_FILTER_ENABLED = NO
+ARGUS_ICLOUD_ENABLED = NO
 DEVELOPMENT_TEAM =
 ARGUS_BUNDLE_PREFIX = com.argus
 
@@ -26,9 +35,13 @@ ARGUS_SIGN_IDENTITY_YES = Apple Development
 CODE_SIGN_IDENTITY = $(ARGUS_SIGN_IDENTITY_$(ARGUS_FILTER_ENABLED))
 CODE_SIGN_STYLE = Automatic
 
-ARGUS_APP_ENTITLEMENTS_NO = Argus/Resources/ArgusMonitor.entitlements
-ARGUS_APP_ENTITLEMENTS_YES = Argus/Resources/Argus.entitlements
+ARGUS_APP_ENTITLEMENTS_NO_NO = Argus/Resources/ArgusMonitor.entitlements
+ARGUS_APP_ENTITLEMENTS_NO_YES = Argus/Resources/ArgusMonitor.entitlements
+ARGUS_APP_ENTITLEMENTS_YES_NO = Argus/Resources/Argus.entitlements
+ARGUS_APP_ENTITLEMENTS_YES_YES = Argus/Resources/ArgusCloud.entitlements
 ARGUS_FILTER_ENTITLEMENTS_NO = ArgusFilter/ArgusFilterLocal.entitlements
 ARGUS_FILTER_ENTITLEMENTS_YES = ArgusFilter/ArgusFilter.entitlements
+ARGUS_WIDGET_ENTITLEMENTS_NO = ArgusWidgets/ArgusWidgetsLocal.entitlements
+ARGUS_WIDGET_ENTITLEMENTS_YES = ArgusWidgets/ArgusWidgets.entitlements
 
 #include? "Local.xcconfig"

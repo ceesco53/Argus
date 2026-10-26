@@ -10,10 +10,13 @@ struct OverviewView: View {
             VStack(alignment: .leading, spacing: 18) {
                 HeroCard()
                 PausedBanner()
+                HealthBanner()
+                LearningBanner()
                 if model.engine == .monitor { MonitorModeBanner() }
                 if let network = model.networkPrompt { NetworkPromptView(network: network) }
                 if !model.bpfUsers.isEmpty || !model.warningEvents.isEmpty { SecurityNoticeCard() }
                 stats
+                ThisWeekCard()
                 TrafficCard()
                 HStack(alignment: .top, spacing: 18) {
                     TopAppsCard()

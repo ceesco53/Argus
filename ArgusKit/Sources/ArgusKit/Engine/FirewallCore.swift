@@ -37,8 +37,8 @@ public final class FirewallCore: @unchecked Sendable {
     public let captures: CaptureManager
 
     /// Checks a process against a rule's stored code requirement. Replaceable for tests.
-    public var requirementChecker: @Sendable (String, FlowContext) -> Bool = { requirement, ctx in
-        CodeSignature.satisfies(requirement: requirement, auditToken: ctx.auditToken, pid: ctx.pid)
+    public var requirementChecker: @Sendable (String, FlowContext) -> CodeSignature.RequirementCheck = { requirement, ctx in
+        CodeSignature.check(requirement: requirement, auditToken: ctx.auditToken, pid: ctx.pid)
     }
 
     /// Lists programs reading /dev/bpf. nil disables packet-capture monitoring.
@@ -67,6 +67,11 @@ public final class FirewallCore: @unchecked Sendable {
         var waiters: [Waiter]
     }
 
+    private struct JournalEntry {
+        var record: ChangeRecord
+        let change: StateChange
+    }
+
     private struct Inner {
         var state: FirewallState
         var compiled = CompiledRuleSet()
@@ -76,18 +81,30 @@ public final class FirewallCore: @unchecked Sendable {
         var dns = DNSCache()
         var saveScheduled = false
         var warnedInvalidSignatures: Set<String> = []
+        /// Process instances already reported for failing a rule's signature check.
+        var warnedSignatureProblems: Set<String> = []
         var lastActivitySave = Date()
         var lastBPFScan = Date.distantPast
+        var journal: [JournalEntry] = []
+        var journalSequence: UInt64 = 0
+        /// The user is in a call, presenting or away (reported by the app; not persisted).
+        var busy = false
+        /// Programs already warned about today's data use, with the day they were warned.
+        var usageWarned: [String: String] = [:]
+        var lastUsageCheck = Date.distantPast
     }
 
     private let inner: Locked<Inner>
     private let bootSession = SystemInfo.bootSessionID
+    /// Argus's own developer team: its own traffic (health checks, downloads) is always allowed.
+    private let ownTeam = CodeSignature.ownTeamIdentifier
 
     public init(host: EngineHost, directory: URL) {
         self.host = host
         store = StateStore(directory: directory)
         captures = CaptureManager(directory: store.capturesDirectory)
         var state = store.loadState() ?? FirewallState.initial()
+        state.removeEmptyDuplicateProfiles()
         let boot = bootSession
         state.rules.removeAll { rule in
             if case .untilRestart(let session) = rule.expiration { return session != boot }
@@ -147,6 +164,14 @@ public final class FirewallCore: @unchecked Sendable {
             activity.recordConnection(flowID: flowID, context: ctx, verdict: verdict)
             return verdict.action == .allow ? .allow(verdict) : .deny(verdict)
         }
+        if inner.withLock({ $0.busy }) {
+            // Don't interrupt: follow a confident suggestion, otherwise the busy setting; review later.
+            let advice = advice(for: ctx)
+            let action = advice.flatMap { $0.isConfident ? $0.suggestion : nil } ?? state.settings.busyAction
+            let verdict = Verdict(action, .deferred, enforced: host.canEnforce)
+            activity.recordConnection(flowID: flowID, context: ctx, verdict: verdict)
+            return action == .allow ? .allow(verdict) : .deny(verdict)
+        }
         if let alertID = enqueueAlert(flowID: flowID, context: ctx, resume: resume) {
             return .pause(alertID: alertID)
         }
@@ -202,18 +227,24 @@ public final class FirewallCore: @unchecked Sendable {
     }
 
     /// The verdict for a connection, or nil when the user should be asked.
-    public func evaluate(_ ctx: FlowContext) -> Verdict? {
+    public func evaluate(_ ctx: FlowContext) -> Verdict? { evaluate(ctx, checkSignatures: true) }
+
+    /// - Parameter checkSignatures: false for hypothetical connections (no process to check, no notices).
+    func evaluate(_ ctx: FlowContext, checkSignatures: Bool) -> Verdict? {
         let (settings, compiled, mode) = inner.withLock { ($0.state.settings, $0.compiled, $0.state.effectiveMode) }
         let enforced = host.canEnforce
         guard settings.protectionEnabled else { return Verdict(.allow, .protectionOff, enforced: enforced) }
         if settings.isPaused() { return Verdict(.allow, .paused, enforced: enforced) }
+        if let ownTeam, ctx.process.teamIdentifier == ownTeam { return Verdict(.allow, .argus, enforced: enforced) }
 
         if let match = compiled.evaluate(ctx) {
-            if match.action == .allow, settings.enforceCodeSignatures, let rule = match.rule,
-               let requirement = rule.codeRequirement, !requirementChecker(requirement, ctx) {
-                notice(.signatureMismatch, title: "Blocked \(ctx.process.name): code signature changed",
-                       detail: "A rule allows \(ctx.process.path), but the program no longer matches the signature it had when the rule was made. It may have been replaced by malware.",
-                       processPath: ctx.process.path)
+            if checkSignatures, match.action == .allow, settings.enforceCodeSignatures, let rule = match.rule,
+               let requirement = rule.codeRequirement, let problem = signatureProblem(requirement, ctx) {
+                let isNew = inner.withLock { inner in
+                    if inner.warnedSignatureProblems.count > 1000 { inner.warnedSignatureProblems.removeAll() }
+                    return inner.warnedSignatureProblems.insert("\(ctx.pid):\(ctx.process.path)").inserted
+                }
+                if isNew { notice(.signatureMismatch, title: problem.title, detail: problem.detail, processPath: ctx.process.path) }
                 return Verdict(.deny, .signatureMismatch(rule.id), enforced: enforced)
             }
             return Verdict(match.action, match.reason, enforced: enforced)
@@ -227,7 +258,7 @@ public final class FirewallCore: @unchecked Sendable {
         switch mode {
         case .silentAllow: return Verdict(.allow, .mode(.silentAllow), enforced: enforced)
         case .silentDeny: return Verdict(.deny, .mode(.silentDeny), enforced: enforced)
-        case .alert: return nil
+        case .alert: return settings.isLearning() ? Verdict(.allow, .learning, enforced: enforced) : nil
         }
     }
 
@@ -468,6 +499,23 @@ public final class FirewallCore: @unchecked Sendable {
         delegate?.firewallCore(self, broadcast: event)
     }
 
+    /// Why a process may not use a rule that remembers its signature, or nil when it may.
+    private func signatureProblem(_ requirement: String, _ ctx: FlowContext) -> (title: String, detail: String)? {
+        switch requirementChecker(requirement, ctx) {
+        case .satisfied:
+            return nil
+        // Updated, removed or quit while running: go by the signature read when Argus first saw it.
+        case .unverifiable where ctx.process.designatedRequirement == requirement:
+            return nil
+        case .unverifiable:
+            return ("Blocked \(ctx.process.name): couldn't check its signature",
+                    "\(ctx.process.path) changed on disk or quit before Argus could check it. If it was just updated, quit and reopen it.")
+        case .violated:
+            return ("Blocked \(ctx.process.name): code signature changed",
+                    "A rule allows \(ctx.process.path), but the program no longer matches the signature it had when the rule was made. It may have been replaced by malware.")
+        }
+    }
+
     private func notice(_ kind: ActivityEvent.Kind, title: String, detail: String, processPath: String? = nil) {
         let event = activity.addEvent(kind, title: title, detail: detail, processPath: processPath)
         broadcast(.notice(event))
@@ -506,6 +554,12 @@ public final class FirewallCore: @unchecked Sendable {
             mutate { $0.settings.pausedUntil = nil }
             notice(.protectionChanged, title: "Protection resumed", detail: "The pause ended; Argus is filtering connections again.")
         }
+        if let until = state.settings.learningUntil, until <= now {
+            mutate { $0.settings.learningUntil = nil }
+            notice(.learningFinished, title: "Learning finished",
+                   detail: "Review what your apps did while Argus was learning, and choose which ones to trust.")
+        }
+        checkDataUsage(now: now)
         let expired = state.rules.filter { rule in
             if case .date(let end) = rule.expiration { return end <= now }
             return false
@@ -587,6 +641,30 @@ public final class FirewallCore: @unchecked Sendable {
     /// Loads a reference list directly (tests, or a list fetched some other way).
     public func installReference(_ list: CompiledBlocklist, id: String) {
         references.withLock { $0[id] = list }
+    }
+
+    /// Warns once a day per program that moves more than the configured amount of data.
+    private func checkDataUsage(now: Date) {
+        let limitMB = state.settings.dataUsageWarningMB
+        let due = inner.withLock { inner -> Bool in
+            guard limitMB > 0, now.timeIntervalSince(inner.lastUsageCheck) >= 60 else { return false }
+            inner.lastUsageCheck = now
+            return true
+        }
+        guard due else { return }
+        let limit = UInt64(limitMB) * 1_048_576
+        let day = DailyCounters.dayKey(for: now)
+        for usage in activity.usageToday(now: now) where usage.bytes > limit {
+            let first = inner.withLock { inner -> Bool in
+                guard inner.usageWarned[usage.path] != day else { return false }
+                inner.usageWarned[usage.path] = day
+                return true
+            }
+            guard first else { continue }
+            notice(.dataUsage, title: "\(usage.name) used \(Formatting.bytes(usage.bytes)) today",
+                   detail: "That's more than your daily warning of \(Formatting.bytes(limit)). The Network Monitor shows where it went.",
+                   processPath: usage.path)
+        }
     }
 
     // MARK: - Rule groups
@@ -687,8 +765,11 @@ public final class FirewallCore: @unchecked Sendable {
 
     public func handle(_ request: ArgusRequest, client: ClientContext, authorization: Data?) async -> ArgusResponse {
         guard isAuthorized(request, client: client, authorization: authorization) else { return .error(.locked) }
+        let before = request.isJournaled ? state : nil
         do {
-            return try await perform(request, client: client)
+            let response = try await perform(request, client: client)
+            if let before { journal(request, before: before) }
+            return response
         } catch let error as ArgusError {
             return .error(error)
         } catch {
@@ -718,6 +799,24 @@ public final class FirewallCore: @unchecked Sendable {
             let newState = mutate { $0.settings.protectionEnabled = enabled }
             protectionChanged(enabled)
             return .state(newState)
+        case .setLearning(let until):
+            let learning = until.map { $0 > Date() } ?? false
+            let newState = mutate { $0.settings.learningUntil = learning ? until : nil }
+            if learning { releasePendingAlerts(with: Verdict(.allow, .learning, enforced: host.canEnforce)) }
+            activity.addEvent(.info, title: learning ? "Learning period started" : "Learning period ended",
+                              detail: learning ? "Unknown connections are allowed quietly and recorded for you to review." : "")
+            return .state(newState)
+        case .setBusy(let busy):
+            inner.withLock { $0.busy = busy }
+            return .ok
+        case .testConnection(let connection):
+            return .test(test(connection, userID: client.userID))
+        case .recentChanges:
+            return .changes(recentChanges)
+        case .undoChange(let id):
+            return .state(try undo(id))
+        case .digest(let days):
+            return .digest(activity.digest(days: max(1, min(days, 40))))
         case .pauseProtection(let until):
             let pausing = until.map { $0 > Date() } ?? false
             let newState = mutate { $0.settings.pausedUntil = pausing ? until : nil }
@@ -742,6 +841,18 @@ public final class FirewallCore: @unchecked Sendable {
                 if let index = state.rules.firstIndex(where: { $0.id == saved.id }) { state.rules[index] = saved } else { state.rules.append(saved) }
             }
             if case .untilQuit(let pid, _) = rule.expiration { watchExit(of: pid) }
+            resolveAlertsCoveredByRules()
+            return .state(newState)
+        case .saveRules(let rules):
+            if rules.contains(where: \.isFromRuleGroup) { throw ArgusError.invalid("Rules from a rule group are managed by its subscription.") }
+            let now = Date()
+            let newState = mutate { state in
+                for var rule in rules {
+                    rule.modifiedAt = now
+                    if let index = state.rules.firstIndex(where: { $0.id == rule.id }) { state.rules[index] = rule } else { state.rules.append(rule) }
+                }
+            }
+            for rule in rules { if case .untilQuit(let pid, _) = rule.expiration { watchExit(of: pid) } }
             resolveAlertsCoveredByRules()
             return .state(newState)
         case .deleteRules(let ids):
@@ -855,8 +966,22 @@ public final class FirewallCore: @unchecked Sendable {
                 if merge {
                     let ruleIDs = Set(state.rules.map(\.id)), profileIDs = Set(state.profiles.map(\.id))
                     let groupURLs = Set(state.ruleGroups.compactMap(\.url))
-                    state.rules += imported.rules.filter { !ruleIDs.contains($0.id) && !$0.isFromRuleGroup }
-                    state.profiles += imported.profiles.filter { !profileIDs.contains($0.id) }
+                    // A profile named like one here is that profile: its rules and networks join it.
+                    var sameProfile: [UUID: UUID] = [:]
+                    for profile in imported.profiles where !profileIDs.contains(profile.id) {
+                        if let index = state.profiles.firstIndex(where: { $0.name.caseInsensitiveCompare(profile.name) == .orderedSame }) {
+                            sameProfile[profile.id] = state.profiles[index].id
+                            state.profiles[index].networks += profile.networks.filter { !state.profiles[index].networks.contains($0) }
+                        } else {
+                            state.profiles.append(profile)
+                        }
+                    }
+                    let incoming = imported.rules.filter { !ruleIDs.contains($0.id) && !$0.isFromRuleGroup }.map { rule in
+                        var rule = rule
+                        if let id = rule.profileID, let existing = sameProfile[id] { rule.profileID = existing }
+                        return rule
+                    }
+                    state.rules += RuleAnalysis.withoutDuplicates(incoming, of: state.rules)
                     state.ruleGroups += imported.ruleGroups.filter { $0.url.map { !groupURLs.contains($0) } ?? true }
                 } else {
                     let revision = state.revision
@@ -871,6 +996,137 @@ public final class FirewallCore: @unchecked Sendable {
             activity.clear()
             return .ok
         }
+    }
+
+    // MARK: - Recent changes
+
+    private func journal(_ request: ArgusRequest, before: FirewallState) {
+        let after = state
+        guard let change = StateChange.between(before, after) else { return }
+        let summary = describe(request, change: change, before: before, after: after)
+        let record = inner.withLock { inner -> ChangeRecord in
+            inner.journalSequence += 1
+            let record = ChangeRecord(id: inner.journalSequence, date: Date(), summary: summary, isUndone: false)
+            inner.journal.append(JournalEntry(record: record, change: change))
+            if inner.journal.count > 100 { inner.journal.removeFirst(inner.journal.count - 100) }
+            return record
+        }
+        broadcast(.changeRecorded(record))
+    }
+
+    public var recentChanges: [ChangeRecord] {
+        inner.withLock { $0.journal.map(\.record).reversed() }
+    }
+
+    private func undo(_ id: UInt64) throws -> FirewallState {
+        guard let entry = inner.withLock({ $0.journal.first { $0.record.id == id } }) else { throw ArgusError.notFound("That change") }
+        guard !entry.record.isUndone else { throw ArgusError.invalid("That change was already undone.") }
+        let newState = mutate { entry.change.undo(on: &$0) }
+        inner.withLock { inner in
+            if let index = inner.journal.firstIndex(where: { $0.record.id == id }) { inner.journal[index].record.isUndone = true }
+        }
+        // Lists brought back need downloading again; "until quit" rules need watching again.
+        let refetch = entry.change.groups.values.compactMap(\.before).filter { group in
+            group.url != nil && inner.withLock { $0.blocklists[group.id] == nil }
+        }.map(\.id)
+        if !refetch.isEmpty { Task { await self.refreshRuleGroups(refetch) } }
+        for rule in entry.change.rules.values.compactMap(\.before) {
+            if case .untilQuit(let pid, _) = rule.expiration { watchExit(of: pid) }
+        }
+        return newState
+    }
+
+    private func describe(_ request: ArgusRequest, change: StateChange, before: FirewallState, after: FirewallState) -> String {
+        func profileName(_ id: UUID?) -> String { (after.profile(id: id) ?? before.profile(id: id)).map { "“\($0.name)”" } ?? "no profile" }
+        switch request {
+        case .saveRule(let rule):
+            return (before.rules.contains { $0.id == rule.id } ? "Changed rule: " : "Added rule: ") + rule.summary
+        case .saveRules(let rules):
+            let added = change.addedRules.count, changed = rules.count - added
+            if rules.count == 1 { return (added == 1 ? "Added rule: " : "Changed rule: ") + rules[0].summary }
+            return added == rules.count ? "Added \(added) rules" : "Saved \(rules.count) rules (\(added) new, \(changed) changed)"
+        case .deleteRules:
+            let removed = change.removedRules
+            return removed.count == 1 ? "Deleted rule: \(removed[0].summary)" : "Deleted \(removed.count) rules"
+        case .setRulesEnabled(let ids, let enabled):
+            let verb = enabled ? "Enabled" : "Disabled"
+            return ids.count == 1 ? "\(verb) rule: \(after.rules.first { $0.id == ids[0] }?.summary ?? "")" : "\(verb) \(ids.count) rules"
+        case .resolveAlert:
+            guard let rule = change.addedRules.first else { return "Answered an alert" }
+            return "\(rule.action == .allow ? "Allowed" : "Denied") from an alert: \(rule.summary)"
+        case .saveProfile(let profile):
+            return before.profile(id: profile.id) == nil ? "Added profile “\(profile.name)”" : "Changed profile “\(profile.name)”"
+        case .deleteProfile(let id):
+            return "Deleted profile \(profileName(id))"
+        case .activateProfile(let id):
+            return "Switched to \(profileName(id))"
+        case .assignNetwork(let network, let id):
+            return id == nil ? "Remembered \(network.displayName)" : "Linked \(network.displayName) to \(profileName(id))"
+        case .saveRuleGroup(let group):
+            guard let old = before.ruleGroup(id: group.id) else { return "Added blocklist “\(group.name)”" }
+            if old.isEnabled != group.isEnabled { return "\(group.isEnabled ? "Turned on" : "Turned off") blocklist “\(group.name)”" }
+            return "Changed blocklist “\(group.name)”"
+        case .deleteRuleGroup(let id):
+            return "Removed blocklist “\(before.ruleGroup(id: id)?.name ?? "")”"
+        case .importRuleGroup(let name, _, _):
+            return "Imported “\(name)”"
+        case .setMode(let mode):
+            return "Mode: \(before.settings.mode.displayName) → \(mode.displayName)"
+        case .setProtection(let enabled):
+            return enabled ? "Turned protection on" : "Turned protection off"
+        case .pauseProtection(let until):
+            return until == nil ? "Resumed protection" : "Paused protection"
+        case .setLearning(let until):
+            return until == nil ? "Ended the learning period" : "Started a learning period"
+        case .importBackup:
+            return "Restored a backup"
+        case .undoChange(let id):
+            return "Undid: \(inner.withLock { $0.journal.first { $0.record.id == id }?.record.summary } ?? "a change")"
+        case .updateSettings:
+            let names = change.changedSettings.map { FirewallCore.settingNames[$0] ?? $0 }
+            return names.isEmpty ? "Changed settings" : "Changed \(names.joined(separator: ", "))"
+        default:
+            return "Changed the configuration"
+        }
+    }
+
+    static let settingNames: [String: String] = [
+        "protectionEnabled": "protection", "pausedUntil": "pause", "mode": "mode", "activeProfileID": "profile",
+        "autoSwitchProfiles": "automatic profile switching", "allowAppleSoftware": "allowing Apple software",
+        "allowSignedSoftware": "allowing identified developers", "allowLocalNetwork": "allowing the local network",
+        "alertTimeout": "alert timeout", "alertTimeoutAction": "what happens to unanswered alerts",
+        "unattendedAction": "what happens when nobody can answer", "enforceCodeSignatures": "code signature enforcement",
+        "monitorPacketCapture": "packet sniffer detection", "learnHostnamesFromDNS": "learning hostnames from DNS",
+        "lockEnabled": "the settings lock", "alertsAllowedWhenLocked": "alerts while locked",
+        "suggestAnswers": "suggested answers", "alertTimeoutFollowsAdvice": "following suggestions on timeout",
+        "learningUntil": "the learning period", "busyAction": "what happens while you're busy",
+        "dataUsageWarningMB": "the data usage warning",
+    ]
+
+    // MARK: - Hypothetical connections
+
+    /// What Argus would do if a program connected to `test.host`, and why.
+    public func test(_ test: ConnectionTest, userID: UInt32) -> ConnectionTestResult {
+        let identity = test.processPath.map { activity.process($0)?.identity ?? CodeSignature.identity(path: $0) }
+            ?? ProcessIdentity(path: "*", name: "any app")
+        let address = IPAddress(test.host)
+        let host = address == nil ? test.host.lowercased() : address.flatMap { hostname(for: $0) }
+        let ctx = FlowContext(
+            process: identity, userID: userID, hostname: host, address: address, remotePort: test.port, localPort: test.port,
+            proto: test.proto, direction: test.direction)
+        let verdict = evaluate(ctx, checkSignatures: false)
+        let current = state
+        var blocklistName: String?
+        if case .blocklist(let id)? = verdict?.reason { blocklistName = current.ruleGroup(id: id)?.name }
+        let explanation: String = if let verdict {
+            verdict.reason.explanation(in: current)
+        } else if inner.withLock({ $0.busy }) {
+            "No rule covers this; you're busy, so Argus would decide without asking"
+        } else {
+            "No rule covers this; Argus would ask you"
+        }
+        return ConnectionTestResult(verdict: verdict, explanation: explanation, ruleID: verdict?.reason.ruleID,
+                                    blocklistName: blocklistName, advice: advice(for: ctx), processName: identity.name)
     }
 
     private func protectionChanged(_ enabled: Bool) {

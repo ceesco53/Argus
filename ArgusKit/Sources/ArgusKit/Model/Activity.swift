@@ -97,13 +97,19 @@ public enum VerdictReason: Codable, Hashable, Sendable {
     case localNetwork
     case protectionOff
     case paused
+    /// Allowed quietly during the learning period, to be reviewed.
+    case learning
+    /// Decided without asking while the user was busy, to be reviewed.
+    case deferred
+    /// Argus's own traffic (same developer team).
+    case argus
     case signatureMismatch(UUID)
     /// Seen by the monitor only; Argus could not intervene.
     case observed
 
     public var isUnapproved: Bool {
         switch self {
-        case .mode, .alertTimeout, .unattended, .observed: true
+        case .mode, .alertTimeout, .unattended, .observed, .learning, .deferred: true
         default: false
         }
     }
@@ -187,6 +193,7 @@ public struct ActivityEvent: Codable, Hashable, Sendable, Identifiable {
     public enum Kind: String, Codable, Sendable {
         case signatureMismatch, invalidSignature, packetCapture, profileSwitched
         case ruleGroupUpdated, ruleGroupFailed, ruleExpired, captureFinished, protectionChanged, info
+        case learningFinished, dataUsage
     }
 
     public var id: UInt64
@@ -198,7 +205,7 @@ public struct ActivityEvent: Codable, Hashable, Sendable, Identifiable {
 
     public var isWarning: Bool {
         switch kind {
-        case .signatureMismatch, .invalidSignature, .packetCapture, .ruleGroupFailed: true
+        case .signatureMismatch, .invalidSignature, .packetCapture, .ruleGroupFailed, .dataUsage: true
         default: false
         }
     }
@@ -251,8 +258,27 @@ public struct DailyCounters: Codable, Hashable, Sendable {
     public var blockedByLists: Int = 0
     public var bytesIn: UInt64 = 0
     public var bytesOut: UInt64 = 0
+    /// Blocked connections by registrable domain, for the weekly digest.
+    public var blockedDomains: [String: Int] = [:]
+    /// Blocked connections by program name.
+    public var blockedApps: [String: Int] = [:]
+    /// Programs that used the network for the first time that day.
+    public var newApps: [String] = []
 
     public init(day: String) { self.day = day }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        day = try c.decode(String.self, forKey: .day)
+        connections = try c.decodeIfPresent(Int.self, forKey: .connections) ?? 0
+        blocked = try c.decodeIfPresent(Int.self, forKey: .blocked) ?? 0
+        blockedByLists = try c.decodeIfPresent(Int.self, forKey: .blockedByLists) ?? 0
+        bytesIn = try c.decodeIfPresent(UInt64.self, forKey: .bytesIn) ?? 0
+        bytesOut = try c.decodeIfPresent(UInt64.self, forKey: .bytesOut) ?? 0
+        blockedDomains = try c.decodeIfPresent([String: Int].self, forKey: .blockedDomains) ?? [:]
+        blockedApps = try c.decodeIfPresent([String: Int].self, forKey: .blockedApps) ?? [:]
+        newApps = try c.decodeIfPresent([String].self, forKey: .newApps) ?? []
+    }
 
     public static func dayKey(for date: Date) -> String {
         let c = Calendar.current.dateComponents([.year, .month, .day], from: date)

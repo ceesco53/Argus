@@ -106,9 +106,11 @@ public final class ActivityTracker: @unchecked Sendable {
         var perProcess: [String: TrafficHistory] = [:]
         var bpfUsers: [BPFUser] = []
         var flows: [UUID: OpenFlow] = [:]
+        /// Previous days' counters, oldest first, for the weekly digest.
+        var history: [DailyCounters] = []
 
         enum CodingKeys: String, CodingKey {
-            case revision, processes, connections, events, today, global, perProcess
+            case revision, processes, connections, events, today, global, perProcess, history
         }
 
         init() {}
@@ -124,6 +126,7 @@ public final class ActivityTracker: @unchecked Sendable {
             today = try c.decode(DailyCounters.self, forKey: .today)
             global = try c.decode(TrafficHistory.self, forKey: .global)
             perProcess = try c.decode([String: TrafficHistory].self, forKey: .perProcess)
+            history = try c.decodeIfPresent([DailyCounters].self, forKey: .history) ?? []
             // Nothing is open after a restart.
             for key in processes.keys { processes[key]?.activeFlows = 0 }
             for key in connections.keys { connections[key]?.activeFlows = 0 }
@@ -136,7 +139,25 @@ public final class ActivityTracker: @unchecked Sendable {
 
         mutating func rollDay(_ now: Date) {
             let key = DailyCounters.dayKey(for: now)
-            if today.day != key { today = DailyCounters(day: key) }
+            guard today.day != key else { return }
+            let isEmpty = today.connections == 0 && today.bytesIn == 0 && today.bytesOut == 0
+            // Day keys sort chronologically. A clock that steps back keeps counting into today.
+            guard key > today.day || isEmpty else { return }
+            if !isEmpty {
+                history.append(today)
+                if history.count > 40 { history.removeFirst(history.count - 40) }
+            }
+            today = DailyCounters(day: key)
+        }
+
+        mutating func countBlocked(_ ctx: FlowContext) {
+            let domain = ctx.hostname.flatMap(DomainName.registrableDomain) ?? ctx.remoteDisplay
+            today.blockedDomains[domain, default: 0] += 1
+            today.blockedApps[ctx.process.name, default: 0] += 1
+            // Keep the busiest entries; a day of browsing can touch thousands of tracker domains.
+            for keyPath in [\DailyCounters.blockedDomains, \DailyCounters.blockedApps] where today[keyPath: keyPath].count > 400 {
+                today[keyPath: keyPath] = Dictionary(uniqueKeysWithValues: today[keyPath: keyPath].sorted { $0.value > $1.value }.prefix(200).map { ($0.key, $0.value) })
+            }
         }
     }
 
@@ -177,6 +198,9 @@ public final class ActivityTracker: @unchecked Sendable {
             connection.revision = revision
             s.connections[key] = connection
 
+            if s.processes[ctx.process.path] == nil, s.today.newApps.count < 100, !s.today.newApps.contains(ctx.process.name) {
+                s.today.newApps.append(ctx.process.name)
+            }
             var process = s.processes[ctx.process.path] ?? ProcessRecord(
                 identity: ctx.process, viaPaths: [], userIDs: [], firstSeen: now, lastSeen: now, connectCount: 0,
                 allowCount: 0, denyCount: 0, unapprovedCount: 0, bytesIn: 0, bytesOut: 0, activeFlows: 0, revision: revision)
@@ -193,6 +217,7 @@ public final class ActivityTracker: @unchecked Sendable {
 
             s.today.connections += 1
             if !allowed {
+                s.countBlocked(ctx)
                 s.today.blocked += 1
                 if case .blocklist = verdict.reason { s.today.blockedByLists += 1 }
             }
@@ -307,6 +332,27 @@ public final class ActivityTracker: @unchecked Sendable {
     public var revision: UInt64 { state.withLock { $0.revision } }
 
     public func process(_ path: String) -> ProcessRecord? { state.withLock { $0.processes[path] } }
+
+    /// Today plus the previous `days - 1` days.
+    public func digest(days: Int, now: Date = Date()) -> Digest {
+        state.withLock { s in
+            s.rollDay(now)
+            return Digest(days: Array(s.history.suffix(max(0, days - 1))) + [s.today])
+        }
+    }
+
+    /// Bytes each program moved since local midnight.
+    public func usageToday(now: Date = Date()) -> [(path: String, name: String, bytes: UInt64)] {
+        state.withLock { s in
+            let midnight = Int64(Calendar.current.startOfDay(for: now).timeIntervalSince1970)
+            let time = Int64(now.timeIntervalSince1970)
+            return s.perProcess.compactMap { path, history in
+                let (inBytes, outBytes) = history.minutes.sum(from: midnight, to: time)
+                guard inBytes + outBytes > 0 else { return nil }
+                return (path, s.processes[path]?.identity.name ?? ProcessIdentity.defaultName(for: path), inBytes + outBytes)
+            }
+        }
+    }
 
     /// Earlier decisions about a domain, for the advisor. Only answers the user gave (rules and
     /// alert answers) count as this app's history; timeouts and silent modes don't.

@@ -29,6 +29,15 @@ public struct FirewallSettings: Codable, Hashable, Sendable {
     /// Learn hostnames from DNS answers so rules work for apps that connect by address.
     public var learnHostnamesFromDNS = true
 
+    /// While set and in the future, unknown connections in Ask Me mode are allowed quietly and
+    /// recorded, so the user can review them all at once instead of answering a flood of alerts.
+    public var learningUntil: Date?
+    /// What happens to unknown connections while the user is busy (in a call, screen locked)
+    /// and there's no confident suggestion. They're recorded for review either way.
+    public var busyAction: RuleAction = .allow
+    /// Warn when one app moves more than this many megabytes in a day; 0 turns the warning off.
+    public var dataUsageWarningMB = 1024
+
     /// Suggest an answer in alerts from reference lists, the app's identity and past decisions.
     public var suggestAnswers = true
     /// When an alert goes unanswered, follow a confident suggestion instead of `alertTimeoutAction`.
@@ -42,6 +51,8 @@ public struct FirewallSettings: Codable, Hashable, Sendable {
     public init() {}
 
     public func isPaused(at now: Date = Date()) -> Bool { pausedUntil.map { $0 > now } ?? false }
+
+    public func isLearning(at now: Date = Date()) -> Bool { learningUntil.map { $0 > now } ?? false }
 
     public init(from decoder: Decoder) throws {
         // Decode leniently so settings files from older versions keep working.
@@ -61,6 +72,9 @@ public struct FirewallSettings: Codable, Hashable, Sendable {
         enforceCodeSignatures = try c.decodeIfPresent(Bool.self, forKey: .enforceCodeSignatures) ?? d.enforceCodeSignatures
         monitorPacketCapture = try c.decodeIfPresent(Bool.self, forKey: .monitorPacketCapture) ?? d.monitorPacketCapture
         learnHostnamesFromDNS = try c.decodeIfPresent(Bool.self, forKey: .learnHostnamesFromDNS) ?? d.learnHostnamesFromDNS
+        learningUntil = try c.decodeIfPresent(Date.self, forKey: .learningUntil)
+        busyAction = try c.decodeIfPresent(RuleAction.self, forKey: .busyAction) ?? d.busyAction
+        dataUsageWarningMB = try c.decodeIfPresent(Int.self, forKey: .dataUsageWarningMB) ?? d.dataUsageWarningMB
         suggestAnswers = try c.decodeIfPresent(Bool.self, forKey: .suggestAnswers) ?? d.suggestAnswers
         alertTimeoutFollowsAdvice = try c.decodeIfPresent(Bool.self, forKey: .alertTimeoutFollowsAdvice) ?? d.alertTimeoutFollowsAdvice
         lockEnabled = try c.decodeIfPresent(Bool.self, forKey: .lockEnabled) ?? d.lockEnabled
@@ -93,6 +107,19 @@ public struct FirewallState: Codable, Hashable, Sendable {
     }
 
     public func ruleGroup(id: UUID) -> RuleGroup? { ruleGroups.first { $0.id == id } }
+
+    /// Drops profiles that repeat another profile's name and hold nothing: no rules, no networks,
+    /// not active. Merging backups into a fresh install used to add a second set of starter profiles.
+    public mutating func removeEmptyDuplicateProfiles() {
+        let used = Set(rules.compactMap(\.profileID) + [settings.activeProfileID].compactMap { $0 })
+        func isEmpty(_ profile: Profile) -> Bool { profile.networks.isEmpty && !used.contains(profile.id) }
+        let byName = Dictionary(grouping: profiles) { $0.name.lowercased() }
+        profiles.removeAll { profile in
+            guard isEmpty(profile), let same = byName[profile.name.lowercased()], same.count > 1 else { return false }
+            // When every one of them is empty, keep the first.
+            return same.contains { !isEmpty($0) } || same.first?.id != profile.id
+        }
+    }
 
     /// Rules for a newly installed Argus: keep the Mac's own plumbing working.
     public static func initial() -> FirewallState {

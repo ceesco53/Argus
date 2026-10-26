@@ -9,11 +9,34 @@ struct MonitorView: View {
     @State private var selectedConnection: ConnectionRecord.ID?
     @State private var showInspector = false
     @State private var editingRule: Rule?
+    @State private var grouping: Grouping = .apps
+    @State private var selectedDomain: String?
 
     enum Filter: String, CaseIterable, Identifiable {
-        case all = "All", active = "Active Now", blocked = "Blocked", unapproved = "No Rule Yet"
+        case all = "All", active = "Active Now", blocked = "Blocked", unapproved = "No Rule Yet", new = "New This Week"
         var id: String { rawValue }
     }
+
+    enum Grouping: String, CaseIterable, Identifiable {
+        case apps = "Apps", domains = "Domains"
+        var id: String { rawValue }
+    }
+
+    struct DomainRow: Identifiable {
+        let domain: String
+        var bytes: UInt64 = 0
+        var connections = 0
+        var blocked = 0
+        var apps = Set<String>()
+        var lastSeen = Date.distantPast
+        var id: String { domain }
+    }
+
+    private static func domain(of connection: ConnectionRecord) -> String {
+        connection.hostname.flatMap(DomainName.registrableDomain) ?? connection.remote
+    }
+
+    private var weekAgo: Date { Date().addingTimeInterval(-7 * 86_400) }
 
     enum Order: String, CaseIterable, Identifiable {
         case recent = "Most Recent", traffic = "Most Data", name = "Name"
@@ -23,15 +46,26 @@ struct MonitorView: View {
     var body: some View {
         @Bindable var model = model
         HSplitView {
-            processList
-                .frame(minWidth: 230, idealWidth: 270, maxWidth: 400)
-            detail
-                .frame(minWidth: 460, maxWidth: .infinity)
+            Group {
+                if grouping == .apps { processList } else { domainList }
+            }
+            .frame(minWidth: 230, idealWidth: 270, maxWidth: 400)
+            Group {
+                if grouping == .apps { detail } else { domainDetail }
+            }
+            .frame(minWidth: 460, maxWidth: .infinity)
         }
         .navigationTitle("Network Monitor")
         .navigationSubtitle(model.isEnforcing ? "" : "Observing only")
         .searchable(text: $search, placement: .toolbar, prompt: "Apps, servers or addresses")
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("Group by", selection: $grouping) {
+                    ForEach(Grouping.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .help("List apps, or the domains they talk to")
+            }
             ToolbarItem {
                 Picker("Show", selection: $filter) {
                     ForEach(Filter.allCases) { Text($0.rawValue).tag($0) }
@@ -67,6 +101,7 @@ struct MonitorView: View {
             case .active: process.activeFlows > 0 || model.processRates[process.id] != nil
             case .blocked: process.denyCount > 0
             case .unapproved: process.unapprovedCount > 0
+            case .new: process.firstSeen > weekAgo
             }
         }.filter { process in
             term.isEmpty || process.identity.name.lowercased().contains(term) || process.id.lowercased().contains(term)
@@ -135,17 +170,20 @@ struct MonitorView: View {
 
     // MARK: Detail
 
+    private func passesFilter(_ connection: ConnectionRecord) -> Bool {
+        switch filter {
+        case .all: true
+        case .active: connection.activeFlows > 0
+        case .blocked: connection.isBlocked
+        case .unapproved: connection.lastVerdict.reason.isUnapproved
+        case .new: connection.firstSeen > weekAgo
+        }
+    }
+
     private var visibleConnections: [ConnectionRecord] {
         let term = search.lowercased()
         let base = model.selectedProcessPath.map { model.connections(of: $0) } ?? Array(model.connections.values)
-        return base.filter { connection in
-            switch filter {
-            case .all: true
-            case .active: connection.activeFlows > 0
-            case .blocked: connection.isBlocked
-            case .unapproved: connection.lastVerdict.reason.isUnapproved
-            }
-        }.filter { connection in
+        return base.filter(passesFilter).filter { connection in
             term.isEmpty || connection.remote.contains(term) || connection.addresses.contains { $0.contains(term) }
                 || model.selectedProcessPath != nil || model.identity(for: connection.processPath).name.lowercased().contains(term)
         }
@@ -169,6 +207,117 @@ struct MonitorView: View {
                 selection: $selectedConnection,
                 onOpen: { showInspector = true },
                 onCreateRule: { editingRule = $0 })
+        }
+    }
+
+    // MARK: Domains
+
+    private var domainRows: [DomainRow] {
+        let term = search.lowercased()
+        var rows: [String: DomainRow] = [:]
+        for connection in model.connections.values where passesFilter(connection) {
+            let domain = Self.domain(of: connection)
+            var row = rows[domain] ?? DomainRow(domain: domain)
+            row.bytes += connection.totalBytes
+            row.connections += connection.connectCount
+            row.blocked += connection.denyCount
+            row.apps.insert(connection.processPath)
+            row.lastSeen = max(row.lastSeen, connection.lastSeen)
+            rows[domain] = row
+        }
+        return rows.values.filter { term.isEmpty || $0.domain.contains(term) }.sorted { a, b in
+            switch order {
+            case .recent: a.lastSeen > b.lastSeen
+            case .traffic: a.bytes > b.bytes
+            case .name: a.domain < b.domain
+            }
+        }
+    }
+
+    private var domainList: some View {
+        let rows = domainRows
+        return VStack(spacing: 0) {
+            List(selection: $selectedDomain) {
+                ForEach(rows) { row in
+                    HStack(spacing: 10) {
+                        Image(systemName: "globe")
+                            .font(.title3)
+                            .foregroundStyle(row.blocked > 0 && row.blocked == row.connections ? Color.denied : .secondary)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(row.domain).fontWeight(.medium).lineLimit(1)
+                            Text("\(row.apps.count) app\(row.apps.count == 1 ? "" : "s") · \(row.connections.formatted()) connections")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 4)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(Formatting.bytes(row.bytes)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            if row.blocked > 0 {
+                                Text("\(row.blocked.formatted()) blocked").font(.caption2).foregroundStyle(Color.denied)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 3)
+                    .tag(row.domain)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .listStyle(.inset)
+            Divider()
+            HStack {
+                Picker("Sort", selection: $order) {
+                    ForEach(Order.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .labelsHidden()
+                .fixedSize()
+                Spacer()
+                Text("\(rows.count) domains").font(.caption).foregroundStyle(.secondary)
+            }
+            .controlSize(.small)
+            .padding(8)
+        }
+    }
+
+    @ViewBuilder
+    private var domainDetail: some View {
+        if let domain = selectedDomain {
+            let connections = model.connections.values.filter { Self.domain(of: $0) == domain && passesFilter($0) }
+            let apps = Set(connections.map(\.processPath)).map { model.identity(for: $0) }.sorted { $0.name < $1.name }
+            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(domain).font(.title2.weight(.semibold))
+                    HStack(spacing: 6) {
+                        ForEach(apps.prefix(12), id: \.path) { identity in
+                            AppIconView(identity: identity, size: 20).help(identity.name)
+                        }
+                        Text(apps.map(\.name).joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    HStack {
+                        Menu("Rule for Every App") {
+                            Button("Allow \(domain) for Every App") {
+                                Task { _ = await model.save(Rule(action: .allow, remote: .domain(domain), notes: "From the domain view")) }
+                            }
+                            Button("Block \(domain) for Every App") {
+                                Task { _ = await model.save(Rule(action: .deny, remote: .domain(domain), notes: "From the domain view")) }
+                            }
+                        }
+                        .fixedSize()
+                        if let url = researchURL(for: domain) { Link("Research \(domain)", destination: url).font(.callout) }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                Divider()
+                ConnectionTable(
+                    connections: connections,
+                    showProgram: true,
+                    selection: $selectedConnection,
+                    onOpen: { showInspector = true },
+                    onCreateRule: { editingRule = $0 })
+            }
+        } else {
+            ContentUnavailableView("Choose a domain", systemImage: "globe",
+                                   description: Text("See which apps talk to it, how much, and what was blocked."))
         }
     }
 }
@@ -463,6 +612,7 @@ struct QuickRuleButtons: View {
         }
         .buttonStyle(.plain)
         .help(action == .allow ? "Always allow this connection" : "Always deny this connection")
+        .accessibilityLabel(action == .allow ? "Always allow \(connection.remote)" : "Always deny \(connection.remote)")
     }
 }
 

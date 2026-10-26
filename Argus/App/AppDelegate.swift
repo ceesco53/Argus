@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppModel.shared = model
         alertPanel = AlertPanelController(model: model)
         model.onAlertsChanged = { [weak self] in self?.alertPanel?.update() }
         Task {
@@ -16,6 +17,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "ArgusDebugAlert") { model.showSampleAlert() }
             if UserDefaults.standard.bool(forKey: "ArgusDebugMenu") { showMenuPreview() }
+            switch UserDefaults.standard.string(forKey: "ArgusDebugSheet") {
+            case "review": model.showReview = true
+            case "digest": model.showDigest = true
+            case "changes": model.showChanges = true
+            default: break
+            }
             #endif
         }
 
@@ -34,8 +41,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.title = "Menu Preview"
         panel.hidesOnDeactivate = false
         let host = NSHostingController(rootView: MenuBarView().environment(model))
-        host.sizingOptions = [.preferredContentSize]
+        host.sizingOptions = [] // tracking the preferred size loops on wrapping text (see AlertPanelController)
         panel.contentViewController = host
+        panel.setContentSize(host.view.fittingSize)
         panel.center()
         panel.orderFrontRegardless()
         menuPreview = panel

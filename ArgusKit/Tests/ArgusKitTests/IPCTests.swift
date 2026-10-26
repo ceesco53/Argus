@@ -89,3 +89,22 @@ import Testing
         #expect(closed.current == 2)
     }
 }
+
+@Suite struct VersionSkewTests {
+    @Test func unknownRequestsGetAnAnswer() async throws {
+        let (core, _) = makeCore()
+        let server = ArgusServer(core: core)
+        let (clientEnd, serverEnd) = InMemoryChannel.pair()
+        server.accept(serverEnd)
+        let reply = Locked<Data?>(nil)
+        clientEnd.activate(onMessage: { data in reply.withLock { $0 = data } }, onClose: {})
+        // A request from a future version: a case this engine doesn't have.
+        clientEnd.send(Data(#"{"request":{"id":42,"_1":{"teleport":{}},"authorization":null}}"#.utf8))
+        try await Task.sleep(for: .milliseconds(100))
+        let data = try #require(reply.current)
+        guard case .response(42, .error(.unsupported)) = try WireMessage.decode(data) else {
+            Issue.record("expected an unsupported error for request 42")
+            return
+        }
+    }
+}

@@ -172,6 +172,8 @@ struct SecurityView: View {
         case .captureFinished: "record.circle"
         case .protectionChanged: "power"
         case .info: "info.circle"
+        case .learningFinished: "graduationcap"
+        case .dataUsage: "chart.bar.xaxis"
         }
     }
 }

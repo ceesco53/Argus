@@ -60,8 +60,20 @@ public enum ArgusRequest: Codable, Sendable {
     case setProtection(Bool)
     /// Allows everything until the date; nil resumes protection now.
     case pauseProtection(until: Date?)
+    /// Starts (or with nil, ends) the learning period.
+    case setLearning(until: Date?)
+    /// The user is in a call, presenting or away: decide without asking and record for review.
+    case setBusy(Bool)
+    /// What Argus would do with a connection, without one being made.
+    case testConnection(ConnectionTest)
+    case recentChanges
+    case undoChange(UInt64)
+    /// Counters for today and the previous days, for the weekly report.
+    case digest(days: Int)
 
     case saveRule(Rule)
+    /// Several rules as one change (one entry in Recent Changes, one undo).
+    case saveRules([Rule])
     case deleteRules([UUID])
     case setRulesEnabled([UUID], Bool)
 
@@ -93,10 +105,23 @@ public enum ArgusRequest: Codable, Sendable {
     case importBackup(Data, merge: Bool)
     case clearActivity
 
+    /// Configuration changes the user makes, recorded in Recent Changes so they can be undone.
+    public var isJournaled: Bool {
+        switch self {
+        case .saveRule, .saveRules, .deleteRules, .setRulesEnabled, .saveProfile, .deleteProfile, .activateProfile, .assignNetwork,
+             .saveRuleGroup, .deleteRuleGroup, .importRuleGroup, .resolveAlert, .updateSettings, .setMode, .setProtection,
+             .pauseProtection, .setLearning, .importBackup, .undoChange:
+            true
+        default:
+            false
+        }
+    }
+
     /// Requests that change configuration and therefore honour the settings lock.
     public var isMutating: Bool {
         switch self {
-        case .hello, .getState, .getActivity, .getTraffic, .pendingAlerts, .alertShown, .listCaptures, .fetchCapture, .exportBackup, .reportNetwork:
+        case .hello, .getState, .getActivity, .getTraffic, .pendingAlerts, .alertShown, .listCaptures, .fetchCapture, .exportBackup, .reportNetwork,
+             .setBusy, .testConnection, .recentChanges, .digest:
             false
         default:
             true
@@ -136,6 +161,9 @@ public enum ArgusResponse: Codable, Sendable {
     case capture(CaptureSession)
     case captures([CaptureSession])
     case data(Data)
+    case test(ConnectionTestResult)
+    case changes([ChangeRecord])
+    case digest(Digest)
 }
 
 /// Pushed from the engine to connected clients.
@@ -145,6 +173,8 @@ public enum ArgusEvent: Codable, Sendable {
     case stateChanged(revision: UInt64)
     /// Something the user should probably hear about (BPF access, signature mismatch...).
     case notice(ActivityEvent)
+    /// A configuration change was recorded and can be undone.
+    case changeRecorded(ChangeRecord)
 }
 
 /// One frame on the wire.

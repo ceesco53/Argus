@@ -10,6 +10,7 @@ struct OnboardingView: View {
 
     @State private var page = 0
     @State private var mode: FilterMode = .alert
+    @State private var learnFirst = true
     @State private var chosenLists: Set<String> = Set(BlocklistCatalog.entries.filter(\.isRecommended).map(\.id))
     @State private var launchAtLogin = true
     @State private var downloadLocations = true
@@ -55,7 +56,9 @@ struct OnboardingView: View {
     private func advance() {
         switch page {
         case 2:
-            Task { await model.setMode(mode) }
+            Task {
+                if learnFirst { await model.startLearning(days: 3) } else { await model.setMode(mode) }
+            }
         case 3:
             let existing = Set(model.state.ruleGroups.compactMap(\.catalogID))
             for entry in BlocklistCatalog.entries where chosenLists.contains(entry.id) && !existing.contains(entry.id) {
@@ -122,7 +125,8 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 18) {
             pageHeader("bell.badge", "When an app tries something new", "You can change this at any time from the menu bar.")
             VStack(spacing: 10) {
-                modeCard(.alert, "Ask me", "Argus holds the connection and asks. Most private; a few questions in the first days.", recommended: true)
+                learnCard
+                modeCard(.alert, "Ask me from the start", "Argus holds each new connection and asks. Most private, but expect a lot of questions on the first day.")
                 modeCard(.silentAllow, "Allow, and let me review later", "Nothing is interrupted. Unknown connections are allowed and marked so you can make rules later.")
                 modeCard(.silentDeny, "Deny anything I haven't allowed", "Lockdown. Only Apple software and connections you've explicitly allowed get through.")
             }
@@ -130,8 +134,41 @@ struct OnboardingView: View {
         }
     }
 
-    private func modeCard(_ value: FilterMode, _ title: String, _ detail: String, recommended: Bool = false) -> some View {
+    private var learnCard: some View {
         Button {
+            learnFirst = true
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "graduationcap")
+                    .font(.title2)
+                    .foregroundStyle(.tint)
+                    .frame(width: 36)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack {
+                        Text("Learn for 3 days, then ask me").font(.headline)
+                        Pill(text: "Recommended", tint: .allowed)
+                    }
+                    Text("Argus quietly records what your apps do, then you review them all at once. After that it asks about anything new.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Image(systemName: learnFirst ? "checkmark.circle.fill" : "circle")
+                    .font(.title2)
+                    .foregroundStyle(learnFirst ? Color.accentColor : .secondary)
+            }
+            .padding(14)
+            .background(learnFirst ? Color.accentColor.opacity(0.1) : Color.clear, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(learnFirst ? Color.accentColor : Color.secondary.opacity(0.25)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(learnFirst ? .isSelected : [])
+    }
+
+    private func modeCard(_ value: FilterMode, _ title: String, _ detail: String, recommended: Bool = false) -> some View {
+        let selected = !learnFirst && mode == value
+        return Button {
+            learnFirst = false
             mode = value
         } label: {
             HStack(spacing: 14) {
@@ -147,13 +184,13 @@ struct OnboardingView: View {
                     Text(detail).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                Image(systemName: mode == value ? "checkmark.circle.fill" : "circle")
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                     .font(.title2)
-                    .foregroundStyle(mode == value ? Color.accentColor : .secondary)
+                    .foregroundStyle(selected ? Color.accentColor : .secondary)
             }
             .padding(14)
-            .background(mode == value ? Color.accentColor.opacity(0.1) : Color.clear, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(mode == value ? Color.accentColor : Color.secondary.opacity(0.25)))
+            .background(selected ? Color.accentColor.opacity(0.1) : Color.clear, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? Color.accentColor : Color.secondary.opacity(0.25)))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

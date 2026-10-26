@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>ArgusAppGroup</key>
+	<string>$(TeamIdentifierPrefix)$(ARGUS_BUNDLE_PREFIX).Argus</string>
 	<key>ArgusMachServiceName</key>
 	<string>$(TeamIdentifierPrefix)$(ARGUS_BUNDLE_PREFIX).Argus.xpc.$(CURRENT_PROJECT_VERSION)</string>
 	<key>CFBundleDevelopmentRegion</key>
@@ -36,5 +38,11 @@
 	<string>Argus reads the name of your Wi-Fi network to switch profiles automatically. Your location is never used or stored.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Argus reads the name of your Wi-Fi network to switch profiles automatically. Your location is never used or stored.</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>$(ARGUS_UPDATE_FEED_URL)</string>
+	<key>SUPublicEDKey</key>
+	<string>$(ARGUS_UPDATE_PUBLIC_KEY)</string>
 </dict>
 </plist>

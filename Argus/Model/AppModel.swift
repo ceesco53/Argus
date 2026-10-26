@@ -3,9 +3,10 @@ import ArgusKit
 import Foundation
 import Observation
 import UserNotifications
+import WidgetKit
 
 enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
-    case overview, monitor, map, rules, blocklists, profiles, security, capture
+    case overview, monitor, map, rules, blocklists, profiles, security, capture, troubleshoot
 
     var id: String { rawValue }
 
@@ -19,6 +20,7 @@ enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
         case .profiles: "Profiles"
         case .security: "Security"
         case .capture: "Traffic Capture"
+        case .troubleshoot: "Troubleshoot"
         }
     }
 
@@ -32,6 +34,7 @@ enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
         case .profiles: "person.2.crop.square.stack"
         case .security: "checkmark.seal"
         case .capture: "record.circle"
+        case .troubleshoot: "stethoscope"
         }
     }
 }
@@ -39,6 +42,9 @@ enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
 /// Everything the user interface shows, mirrored from the firewall engine.
 @MainActor @Observable
 final class AppModel {
+    /// The running app's model, for App Intents and other system entry points.
+    static weak var shared: AppModel?
+
     enum Engine: Equatable {
         case starting
         /// Connected to the network extension: connections are enforced.
@@ -52,7 +58,9 @@ final class AppModel {
     private(set) var hello: ServerHello?
 
     // Configuration
-    private(set) var state = FirewallState()
+    private(set) var state = FirewallState() {
+        didSet { if state.revision != oldValue.revision { cloud.localChanged() } }
+    }
 
     // Activity
     private(set) var processes: [String: ProcessRecord] = [:]
@@ -72,6 +80,16 @@ final class AppModel {
     private(set) var isUnlocked = false
     private(set) var refreshingGroups: Set<UUID> = []
 
+    // Experience
+    private(set) var toast: Toast?
+    var focusedAlertID: UUID?
+    var showReview = false
+    var showDigest = false
+    var showChanges = false
+    var troubleshootAppPath: String?
+    /// Connections Argus decided on its own during the current busy spell.
+    private(set) var decidedWhileBusy = 0
+
     // Navigation
     var section: SidebarItem? = DebugLaunch.section ?? .overview
     var selectedProcessPath: String?
@@ -80,6 +98,10 @@ final class AppModel {
     let filter = FilterManager()
     let geo = GeoLocator()
     let network = NetworkWatcher()
+    let busy = BusyDetector()
+    let health = HealthMonitor()
+    let cloud = CloudSync()
+    @ObservationIgnored let notifier = Notifier()
 
     @ObservationIgnored private var client: ArgusClient?
     @ObservationIgnored private var monitor: MonitorEngine?
@@ -90,10 +112,22 @@ final class AppModel {
     /// DEBUG sample alerts, kept when reconnecting replaces the real ones.
     @ObservationIgnored private var sampleAlertIDs: Set<UUID> = []
     @ObservationIgnored var onAlertsChanged: (() -> Void)?
+    @ObservationIgnored private var undoToastRequested = Date.distantPast
+    @ObservationIgnored private var toastDismissal: Task<Void, Never>?
+    @ObservationIgnored private var housekeeping: Task<Void, Never>?
+    @ObservationIgnored private var snoozedNetworks: Set<NetworkIdentity> = []
+    @ObservationIgnored private var lastWidgetSnapshot: WidgetSnapshot?
+    @ObservationIgnored private var lastWidgetWrite = Date.distantPast
 
     // MARK: - Lifecycle
 
     func start() async {
+        notifier.setUp()
+        notifier.onAction = { [weak self] action in self?.perform(action) }
+        busy.onChange = { [weak self] isBusy in
+            Task { await self?.busyChanged(isBusy) }
+        }
+        busy.start()
         await filter.refresh()
         filter.updateIfNeeded()
         await geo.load()
@@ -103,12 +137,23 @@ final class AppModel {
         }
         network.start()
         await connect()
+        cloud.start(model: self)
         filter.onStatusChange = { [weak self] status in
             Task { await self?.filterStatusChanged(status) }
+        }
+        housekeeping = Task { [weak self] in
+            var minute = 0
+            while !Task.isCancelled {
+                if minute % 10 == 0 { await self?.checkHealth() }
+                if minute % 60 == 1 { await self?.checkWeeklyDigest() }
+                minute += 1
+                try? await Task.sleep(for: .seconds(60))
+            }
         }
     }
 
     func shutdown() {
+        housekeeping?.cancel()
         tasks.forEach { $0.cancel() }
         monitor?.stop()
     }
@@ -207,6 +252,7 @@ final class AppModel {
             hello = try await newClient.hello(ClientHello(role: .app, wantsAlerts: true))
             state = try await newClient.state()
             alerts = try await newClient.pendingAlerts() + alerts.filter { sampleAlertIDs.contains($0.id) }
+            if busy.isBusy { _ = try? await newClient.call(.setBusy(true)) }
             engine = newEngine
             onAlertsChanged?()
         } catch {
@@ -267,7 +313,18 @@ final class AppModel {
             scheduleStateRefresh()
         case .notice(let event):
             if !events.contains(where: { $0.id == event.id }) { events.append(event) }
-            if event.isWarning { notify(event) }
+            if event.kind == .learningFinished {
+                showReview = true
+                notifier.post(id: "argus-learning-\(event.id)", title: event.title, body: event.detail, category: Notifier.reviewCategory)
+            } else if event.isWarning, UserDefaults.standard.object(forKey: "notifyWarnings") as? Bool ?? true {
+                notifier.post(id: "argus-\(event.id)", title: event.title, body: event.detail)
+            }
+        case .changeRecorded(let record):
+            // Offer undo for changes this window just made (not the CLI's or another client's).
+            if Date().timeIntervalSince(undoToastRequested) < 5 {
+                undoToastRequested = .distantPast
+                showToast(record.summary, changeID: record.id)
+            }
         }
     }
 
@@ -298,7 +355,11 @@ final class AppModel {
                 for connection in snapshot.connections { updated[connection.id] = connection }
                 connections = updated
             }
-            if !snapshot.log.isEmpty { log = Array((log + snapshot.log).suffix(1000)) }
+            if !snapshot.log.isEmpty {
+                log = Array((log + snapshot.log).suffix(1000))
+                notifyForegroundBlocks(snapshot.log)
+                if busy.isBusy { decidedWhileBusy += snapshot.log.filter { $0.verdict.reason == .deferred }.count }
+            }
             if !snapshot.events.isEmpty { events = Array((events + snapshot.events.filter { e in !events.contains { $0.id == e.id } }).suffix(500)) }
         }
         revision = snapshot.revision
@@ -307,6 +368,34 @@ final class AppModel {
         processRates = snapshot.processRates
         if bpfUsers != snapshot.bpfUsers { bpfUsers = snapshot.bpfUsers }
         if captures.contains(where: \.isActive) { await refreshCaptures() }
+        publishWidgetSnapshot()
+    }
+
+    /// Shares status with the widgets and Control Center controls through the app group.
+    private func publishWidgetSnapshot() {
+        let settings = state.settings
+        let status: WidgetSnapshot.Status = if !settings.protectionEnabled {
+            .off
+        } else if pausedUntil != nil {
+            .paused
+        } else if engine == .monitor {
+            .monitor
+        } else if learningUntil != nil {
+            .learning
+        } else {
+            .watching
+        }
+        let snapshot = WidgetSnapshot(
+            status: status, pausedUntil: pausedUntil, mode: state.effectiveMode, profileName: state.activeProfile?.name,
+            connectionsToday: today.connections, blockedToday: today.blocked, blockedByListsToday: today.blockedByLists)
+        let previous = lastWidgetSnapshot
+        guard previous.map({ !$0.matches(snapshot) }) ?? true else { return }
+        // Status shows at once; counters change constantly, so write those at most once a minute.
+        let statusChanged = previous?.status != snapshot.status || previous?.pausedUntil != snapshot.pausedUntil || previous?.mode != snapshot.mode
+        guard statusChanged || Date().timeIntervalSince(lastWidgetWrite) > 60, snapshot.save() else { return }
+        lastWidgetSnapshot = snapshot
+        lastWidgetWrite = Date()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     func refreshCaptures() async {
@@ -337,6 +426,13 @@ final class AppModel {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             return nil
         }
+    }
+
+    /// Performs a change and shows an undo message for it.
+    @discardableResult
+    func performUndoable(_ request: ArgusRequest) async -> Bool {
+        undoToastRequested = Date()
+        return await perform(request) != nil
     }
 
     /// Asks for an administrator so locked settings can be changed until `lock()`.
@@ -390,20 +486,28 @@ final class AppModel {
 
     /// Allows what a log entry shows was blocked, for its program or for every program.
     func allow(_ entry: FlowLogEntry, forAllApps: Bool) async {
+        _ = await save(allowRule(for: entry, forAllApps: forAllApps))
+    }
+
+    /// Allows several blocked destinations as one change.
+    func allow(_ entries: [FlowLogEntry], forAllApps: Bool) async {
+        await performUndoable(.saveRules(entries.map { allowRule(for: $0, forAllApps: forAllApps) }))
+    }
+
+    private func allowRule(for entry: FlowLogEntry, forAllApps: Bool) -> Rule {
         let remote: RemoteMatch = if entry.remote != "unknown", IPAddress(entry.remote) == nil {
             .host(entry.remote)
         } else {
             .address(entry.address ?? entry.remote)
         }
         let identity = processes[entry.processPath]?.identity
-        let rule = Rule(
+        return Rule(
             action: .allow,
             process: forAllApps ? .any : .path(entry.processPath),
             codeRequirement: forAllApps ? nil : identity?.designatedRequirement,
             remote: remote,
             direction: entry.direction == .incoming ? .incoming : .outgoing,
             notes: "Allowed from Recently Blocked. It had been blocked by: \(entry.verdict.reason.explanation(in: state))")
-        _ = await save(rule)
     }
 
     func updateSettings(_ change: (inout FirewallSettings) -> Void) async {
@@ -412,11 +516,11 @@ final class AppModel {
         await perform(.updateSettings(settings))
     }
 
-    func save(_ rule: Rule) async -> Bool { await perform(.saveRule(rule)) != nil }
+    func save(_ rule: Rule) async -> Bool { await performUndoable(.saveRule(rule)) }
 
-    func deleteRules(_ ids: some Collection<UUID>) async { await perform(.deleteRules(Array(ids))) }
+    func deleteRules(_ ids: some Collection<UUID>) async { await performUndoable(.deleteRules(Array(ids))) }
 
-    func setRules(_ ids: some Collection<UUID>, enabled: Bool) async { await perform(.setRulesEnabled(Array(ids), enabled)) }
+    func setRules(_ ids: some Collection<UUID>, enabled: Bool) async { await performUndoable(.setRulesEnabled(Array(ids), enabled)) }
 
     /// One-click rule from a monitor row: this program, this server, this port.
     func quickRule(_ action: RuleAction, for connection: ConnectionRecord, wholeDomain: Bool = false, anyProcess: Bool = false) async {
@@ -440,7 +544,7 @@ final class AppModel {
     }
 
     func save(_ profile: Profile) async { await perform(.saveProfile(profile)) }
-    func deleteProfile(_ id: UUID) async { await perform(.deleteProfile(id)) }
+    func deleteProfile(_ id: UUID) async { await performUndoable(.deleteProfile(id)) }
     func activateProfile(_ id: UUID?) async { await perform(.activateProfile(id)) }
 
     func assign(_ network: NetworkIdentity, to profileID: UUID?) async {
@@ -451,11 +555,15 @@ final class AppModel {
 
     private func networkChanged(_ identity: NetworkIdentity) async {
         guard client != nil, case .network(let report)? = await perform(.reportNetwork(identity)) else { return }
-        networkPrompt = !report.isKnown && !state.profiles.isEmpty ? identity : nil
+        networkPrompt = !report.isKnown && !state.profiles.isEmpty && !snoozedNetworks.contains(identity) ? identity : nil
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            await checkHealth()
+        }
     }
 
-    func save(_ group: RuleGroup) async { await perform(.saveRuleGroup(group)) }
-    func deleteGroup(_ id: UUID) async { await perform(.deleteRuleGroup(id)) }
+    func save(_ group: RuleGroup) async { await performUndoable(.saveRuleGroup(group)) }
+    func deleteGroup(_ id: UUID) async { await performUndoable(.deleteRuleGroup(id)) }
 
     func refreshGroups(_ ids: [UUID]?) async {
         let targets = ids ?? state.ruleGroups.filter { $0.url != nil }.map(\.id)
@@ -539,17 +647,25 @@ final class AppModel {
     }
 
     #if DEBUG
-    /// Shows a sample alert so the alert window can be designed without the network filter.
+    /// Shows sample alerts so the alert window can be designed without the network filter.
     func showSampleAlert() {
-        let process = CodeSignature.identity(path: "/Applications/Safari.app/Contents/MacOS/Safari")
-        let context = FlowContext(process: process, hostname: "telemetry.example-analytics.com", address: IPAddress("93.184.216.34"), remotePort: 443)
-        let advice = Advisor.advise(context, state: state, references: [], history: DomainHistory(otherAppsUsing: ["Mail", "Notes", "Music"]))
-        let id = UUID()
-        sampleAlertIDs.insert(id)
-        alerts.append(ConnectionAlert(
-            id: id, createdAt: Date(), deadline: Date().addingTimeInterval(state.settings.alertTimeout), process: process, via: nil,
-            pid: 1, userID: getuid(), hostname: "telemetry.example-analytics.com", address: "93.184.216.34", port: 443, proto: .tcp,
-            direction: .outgoing, pendingConnections: 3, signatureWarning: nil, advice: advice))
+        let samples: [(String, String, String)] = [
+            ("/Applications/Safari.app/Contents/MacOS/Safari", "telemetry.example-analytics.com", "93.184.216.34"),
+            ("/System/Applications/Mail.app/Contents/MacOS/Mail", "imap.example.org", "203.0.113.10"),
+            ("/System/Applications/Mail.app/Contents/MacOS/Mail", "smtp.example.org", "203.0.113.11"),
+            ("/System/Applications/Music.app/Contents/MacOS/Music", "cdn.example.net", "203.0.113.20"),
+        ]
+        for (path, host, address) in samples {
+            let process = CodeSignature.identity(path: path)
+            let context = FlowContext(process: process, hostname: host, address: IPAddress(address), remotePort: 443)
+            let advice = Advisor.advise(context, state: state, references: [], history: DomainHistory(otherAppsUsing: ["Mail", "Notes", "Music"]))
+            let id = UUID()
+            sampleAlertIDs.insert(id)
+            alerts.append(ConnectionAlert(
+                id: id, createdAt: Date(), deadline: Date().addingTimeInterval(state.settings.alertTimeout), process: process, via: nil,
+                pid: 1, userID: getuid(), hostname: host, address: address, port: 443, proto: .tcp,
+                direction: .outgoing, pendingConnections: 1, signatureWarning: nil, advice: advice))
+        }
         onAlertsChanged?()
     }
     #endif
@@ -599,9 +715,261 @@ final class AppModel {
         await refreshActivity()
     }
 
+    // MARK: - Undo
+
+    func showToast(_ message: String, changeID: UInt64?) {
+        toast = Toast(message: message, changeID: changeID)
+        AccessibilityNotification.Announcement(message).post()
+        toastDismissal?.cancel()
+        toastDismissal = Task {
+            try? await Task.sleep(for: .seconds(7))
+            if !Task.isCancelled { toast = nil }
+        }
+    }
+
+    func dismissToast() { toast = nil }
+
+    func undo(_ changeID: UInt64) async {
+        toast = nil
+        if await perform(.undoChange(changeID)) != nil { showToast("Undone", changeID: nil) }
+    }
+
+    /// Undoes the newest change that hasn't been undone yet.
+    func undoLast() async {
+        guard let latest = await recentChanges().first(where: { !$0.isUndone }) else { return }
+        await undo(latest.id)
+    }
+
+    func recentChanges() async -> [ChangeRecord] {
+        (try? await client?.recentChanges()) ?? []
+    }
+
+    // MARK: - Learning and review
+
+    var learningUntil: Date? { state.settings.isLearning() ? state.settings.learningUntil : nil }
+
+    /// Allows unknown connections quietly for `days`, then asks for a review.
+    func startLearning(days: Int) async {
+        if state.settings.mode != .alert { await perform(.setMode(.alert)) }
+        await performUndoable(.setLearning(until: Date().addingTimeInterval(TimeInterval(days) * 86_400)))
+    }
+
+    func endLearning() async { await perform(.setLearning(until: nil)) }
+
+    struct ReviewItem: Identifiable {
+        let process: ProcessRecord
+        /// Destinations it reached without a rule.
+        let destinations: [ConnectionRecord]
+        var id: String { process.id }
+    }
+
+    /// Programs that used the network without a rule (learned, allowed silently, decided while busy…).
+    private static let ownTeam = CodeSignature.ownTeamIdentifier
+
+    var reviewItems: [ReviewItem] {
+        let skipped = Set(UserDefaults.standard.stringArray(forKey: "reviewSkipped") ?? [])
+        let ruled = Set(state.rules.compactMap(\.process.path))
+        return processes.values
+            .filter { $0.unapprovedCount > 0 && !ruled.contains($0.id) && !skipped.contains($0.id) }
+            .filter { $0.identity.teamIdentifier == nil || $0.identity.teamIdentifier != AppModel.ownTeam } // Argus itself
+            .sorted { $0.connectCount > $1.connectCount }
+            .map { process in
+                ReviewItem(process: process, destinations: connections(of: process.id).filter { $0.lastVerdict.reason.isUnapproved })
+            }
+    }
+
+    /// Lets each program connect anywhere (pinned to its code signature).
+    func trust(_ items: [ReviewItem]) async {
+        let rules = items.map { item in
+            Rule(action: .allow, process: .path(item.process.id), codeRequirement: item.process.identity.designatedRequirement,
+                 notes: "Trusted after review")
+        }
+        guard !rules.isEmpty else { return }
+        await performUndoable(.saveRules(rules))
+    }
+
+    /// Allows exactly the destinations a program used.
+    func allowWhatItUsed(_ item: ReviewItem) async {
+        let rules = item.destinations.map { connection -> Rule in
+            var rule = Rule.prefilled(from: connection, identity: item.process.identity)
+            rule.action = .allow
+            rule.ports = .any
+            rule.proto = .any
+            rule.notes = "Allowed after review"
+            return rule
+        }
+        guard !rules.isEmpty else { return }
+        await performUndoable(.saveRules(rules))
+    }
+
+    func block(_ item: ReviewItem) async {
+        _ = await save(Rule(action: .deny, process: .path(item.process.id), codeRequirement: item.process.identity.designatedRequirement,
+                            notes: "Blocked after review"))
+    }
+
+    func skipReview(_ item: ReviewItem) {
+        var skipped = UserDefaults.standard.stringArray(forKey: "reviewSkipped") ?? []
+        skipped.append(item.id)
+        UserDefaults.standard.set(skipped, forKey: "reviewSkipped")
+        processes[item.id] = processes[item.id] // re-render
+    }
+
+    // MARK: - Alert inbox
+
+    var focusedAlert: ConnectionAlert? { alerts.first { $0.id == focusedAlertID } ?? alerts.first }
+
+    /// Answers every waiting alert from one program at once.
+    func answerAll(from processPath: String, action: RuleAction, anywhere: Bool) async {
+        let waiting = alerts.filter { $0.process.path == processPath }
+        guard let first = waiting.first else { return }
+        undoToastRequested = Date()
+        if anywhere {
+            // One rule for any server; the engine releases the rest of this app's alerts with it.
+            await resolve(first, with: AlertDecision(action: action, remoteScope: .any, portScope: .anyPort, duration: .forever))
+        } else {
+            let decision = AlertDecision(action: action, remoteScope: .host, portScope: .anyPort, duration: .forever)
+            await resolve(first, with: decision, alsoAnswering: Array(waiting.dropFirst()))
+        }
+    }
+
+    // MARK: - Busy
+
+    private func busyChanged(_ isBusy: Bool) async {
+        _ = try? await client?.call(.setBusy(isBusy))
+        if isBusy {
+            decidedWhileBusy = 0
+        } else if decidedWhileBusy > 0 {
+            notifier.post(id: "argus-busy-\(Date().timeIntervalSince1970)", title: "Argus decided \(decidedWhileBusy) connection\(decidedWhileBusy == 1 ? "" : "s") while you were busy",
+                          body: "They're waiting in Review if you'd like to make rules for them.", category: Notifier.reviewCategory)
+            decidedWhileBusy = 0
+        }
+    }
+
+    // MARK: - Health
+
+    func checkHealth() async {
+        guard client != nil else { return }
+        let previous = health.status
+        let status = await health.check { [weak self] in self?.recentlyBlockedDNS ?? false }
+        let pauseForSignIn = UserDefaults.standard.object(forKey: "pauseForWiFiSignIn") as? Bool ?? true
+        if status == .captivePortal, previous != .captivePortal, pauseForSignIn, isEnforcing,
+           state.settings.protectionEnabled, pausedUntil == nil {
+            await pause(minutes: 5)
+            notifier.post(id: "argus-captive-\(Date().timeIntervalSince1970)", title: "Wi-Fi sign-in page detected",
+                          body: "Argus paused protection for 5 minutes so you can sign in to this network.")
+        }
+    }
+
+    /// Whether Argus denied DNS traffic in the last five minutes.
+    var recentlyBlockedDNS: Bool {
+        log.suffix(400).contains { $0.verdict.action == .deny && $0.port == 53 && Date().timeIntervalSince($0.date) < 300 }
+    }
+
+    // MARK: - Troubleshooting
+
+    /// Opens the troubleshooter for a program (by default the app the user was just using).
+    func troubleshoot(appPath: String?) {
+        troubleshootAppPath = appPath ?? foregroundProcessPath
+        section = .troubleshoot
+        AppDelegate.showMainWindow()
+    }
+
+    /// The process record belonging to the app the user was last working in.
+    var foregroundProcessPath: String? {
+        guard let app = busy.foregroundApp else { return nil }
+        return processes.values.filter { isPart(of: app, $0.identity) }.max { $0.lastSeen < $1.lastSeen }?.id
+    }
+
+    func test(_ connection: ConnectionTest) async -> ConnectionTestResult? {
+        guard let client else { return nil }
+        do { return try await client.test(connection) } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    /// Whether a program belongs to an app: the app itself, its helpers, or Safari's web engine.
+    func isPart(of app: NSRunningApplication, _ identity: ProcessIdentity) -> Bool {
+        guard let appID = app.bundleIdentifier else { return false }
+        if let id = identity.bundleIdentifier, id == appID || id.hasPrefix(appID + ".") { return true }
+        if appID == "com.apple.Safari", identity.bundleIdentifier?.hasPrefix("com.apple.WebKit") == true { return true }
+        if let path = app.bundleURL?.resolvingSymlinksInPath().path, identity.appBundlePath == path { return true }
+        return false
+    }
+
+    private func notifyForegroundBlocks(_ entries: [FlowLogEntry]) {
+        guard UserDefaults.standard.object(forKey: "notifyForegroundBlocks") as? Bool ?? true,
+              !busy.isBusy, let app = busy.foregroundApp else { return }
+        let blocked = entries.filter { entry in
+            entry.verdict.action == .deny && entry.verdict.isEnforced && isPart(of: app, identity(for: entry.processPath))
+        }
+        guard let first = blocked.first else { return }
+        var seen = Set<String>()
+        let hosts = blocked.map(\.remote).filter { seen.insert($0).inserted }
+        notifier.blocked(appName: app.localizedName ?? first.processName, appPath: first.processPath, hosts: hosts)
+    }
+
+    private func perform(_ action: Notifier.Action) {
+        switch action {
+        case .troubleshoot(let appPath):
+            troubleshoot(appPath: appPath)
+        case .pause(let minutes):
+            Task { await pause(minutes: minutes) }
+        case .openDigest:
+            showDigest = true
+            section = .overview
+            AppDelegate.showMainWindow()
+        case .openReview:
+            showReview = true
+            AppDelegate.showMainWindow()
+        }
+    }
+
+    // MARK: - Weekly report
+
+    func digest(days: Int) async -> Digest? { try? await client?.digest(days: days) }
+
+    /// Once a week (Monday from 9:00), a short summary notification.
+    private func checkWeeklyDigest() async {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: "weeklyReport") as? Bool ?? true else { return }
+        let calendar = Calendar(identifier: .iso8601)
+        let now = Date()
+        guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start,
+              let due = calendar.date(byAdding: .hour, value: 9, to: weekStart) else { return }
+        guard let last = defaults.object(forKey: "lastWeeklyReport") as? Date else {
+            defaults.set(now, forKey: "lastWeeklyReport") // start counting from the first run
+            return
+        }
+        guard now >= due, last < due, let digest = await digest(days: 7), digest.connections > 0 else { return }
+        defaults.set(now, forKey: "lastWeeklyReport")
+        var parts = ["Blocked \(digest.blocked.formatted()) connections"]
+        if digest.blockedByLists > 0 { parts.append("\(digest.blockedByLists.formatted()) by blocklists") }
+        if !digest.newApps.isEmpty { parts.append("\(digest.newApps.count) new app\(digest.newApps.count == 1 ? "" : "s")") }
+        notifier.post(id: "argus-weekly-\(Int(due.timeIntervalSince1970))", title: "Your week with Argus",
+                      body: parts.joined(separator: " · "), category: Notifier.digestCategory)
+    }
+
+    // MARK: - Network prompt
+
+    /// Hides the "which profile?" question for this network until Argus restarts.
+    func snoozeNetworkPrompt() {
+        if let networkPrompt { snoozedNetworks.insert(networkPrompt) }
+        networkPrompt = nil
+    }
+
+    /// Remembers the network without a profile, so Argus stops asking.
+    func neverAskAboutNetwork() async {
+        guard let networkPrompt else { return }
+        await assign(networkPrompt, to: nil)
+    }
+
     // MARK: - Derived data
 
     var isEnforcing: Bool { engine == .filter }
+
+    /// Connected to an engine and ready for requests.
+    var isConnected: Bool { client != nil && engine != .starting }
 
     var currentRate: Rate {
         let recent = recentTraffic.suffix(3)
@@ -632,19 +1000,11 @@ final class AppModel {
 
     var warningEvents: [ActivityEvent] { events.filter(\.isWarning).reversed() }
 
-    // MARK: - Notifications
+}
 
-    private func notify(_ event: ActivityEvent) {
-        guard UserDefaults.standard.object(forKey: "notifyWarnings") as? Bool ?? true else { return }
-        let content = UNMutableNotificationContent()
-        content.title = event.title
-        content.body = event.detail
-        content.sound = .default
-        let request = UNNotificationRequest(identifier: "argus-\(event.id)", content: content, trigger: nil)
-        Task {
-            let center = UNUserNotificationCenter.current()
-            guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else { return }
-            try? await center.add(request)
-        }
-    }
+struct Toast: Identifiable, Equatable {
+    let id = UUID()
+    let message: String
+    /// Set when the message offers to undo a change.
+    let changeID: UInt64?
 }

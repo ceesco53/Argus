@@ -11,6 +11,8 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 14) {
             header
             PausedBanner(compact: true)
+            HealthBanner(compact: true)
+            LearningBanner(compact: true)
             if model.engine == .monitor {
                 Label("Monitoring only — can't block yet", systemImage: "eye.trianglebadge.exclamationmark")
                     .font(.caption)
@@ -23,6 +25,13 @@ struct MenuBarView: View {
             if let network = model.networkPrompt { NetworkPromptView(network: network, compact: true) }
             if !model.recentlyBlocked.isEmpty { recentlyBlocked }
             activeApps
+            Button {
+                model.troubleshoot(appPath: nil)
+            } label: {
+                Label(troubleshootTitle, systemImage: "stethoscope").frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.bordered)
+            if let toast = model.toast { ToastView(toast: toast, model: model) }
             Divider()
             footer
         }
@@ -79,9 +88,16 @@ struct MenuBarView: View {
         }
     }
 
+    private var troubleshootTitle: String {
+        if let app = model.busy.foregroundApp?.localizedName { return "\(app) not working?" }
+        return "Something not working?"
+    }
+
     private var statusLine: String {
         guard model.state.settings.protectionEnabled else { return "Asleep — everything is allowed" }
         if model.pausedUntil != nil { return "Paused — everything is allowed" }
+        if let reason = model.busy.reason { return "Not interrupting: \(reason)" }
+        if model.learningUntil != nil { return "Learning · no alerts" }
         switch model.engine {
         case .starting: return "Waking up…"
         case .filter: return "Watching · \(model.state.effectiveMode.displayName)"
@@ -231,6 +247,12 @@ struct NetworkPromptView: View {
                 Button("No Profile") { Task { await model.assign(network, to: nil) } }
             }
             .controlSize(compact ? .small : .regular)
+            HStack(spacing: 12) {
+                Button("Not Now") { model.snoozeNetworkPrompt() }
+                Button("Don't Ask Again") { Task { await model.neverAskAboutNetwork() } }
+            }
+            .buttonStyle(.link)
+            .font(.caption)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

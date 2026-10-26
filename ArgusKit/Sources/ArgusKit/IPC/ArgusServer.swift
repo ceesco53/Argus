@@ -39,7 +39,15 @@ public final class ArgusServer: FirewallCoreDelegate, @unchecked Sendable {
     }
 
     private func receive(_ data: Data, from session: Session) {
-        guard case .request(let id, let request, let authorization) = try? WireMessage.decode(data) else { return }
+        guard case .request(let id, let request, let authorization) = try? WireMessage.decode(data) else {
+            // A newer client asking for something this engine doesn't know: answer instead of
+            // leaving it waiting forever.
+            if let id = ArgusServer.requestID(in: data),
+               let reply = try? WireMessage.response(id: id, .error(.unsupported("The Argus engine is older than the app. Restart Argus to update it."))).encoded() {
+                session.channel.send(reply)
+            }
+            return
+        }
         if case .hello(let hello) = request { session.hello.withLock { $0 = hello } }
         let client = ClientContext(userID: session.channel.peer.userID, pid: session.channel.peer.pid, role: session.role)
         Task {
@@ -48,6 +56,13 @@ public final class ArgusServer: FirewallCoreDelegate, @unchecked Sendable {
                 session.channel.send(reply)
             }
         }
+    }
+
+    /// The id of a request that couldn't be decoded, read straight from the JSON.
+    static func requestID(in data: Data) -> UInt64? {
+        guard let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let request = message["request"] as? [String: Any] else { return nil }
+        return (request["id"] as? NSNumber)?.uint64Value
     }
 
     // MARK: FirewallCoreDelegate

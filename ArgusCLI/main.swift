@@ -13,6 +13,12 @@ usage: argus <command> [options]
   pause [1m|5m|30m|1h]            Allow everything for a while (no duration: until resumed)
   resume                          End a pause now
 
+  learn 3d|7d|off                 Allow unknown connections quietly for a while, then review
+  test HOST [--process NAME]      What Argus would do if the app connected to HOST, and why
+  changes                         Recent changes to rules and settings
+  undo [ID]                       Undo the latest change (or the one with that ID)
+  report [--days N]               Summary of recent days: blocked, top domains, new apps
+
   blocked [--limit N]             Recently blocked connections and why
   allow HOST [--domain] [--process PATH|NAME]
                                   Always allow a host (or a whole domain), for every app or one
@@ -62,7 +68,7 @@ struct Arguments {
     var options: [String: String] = [:]
     var flags: Set<String> = []
 
-    static let valueOptions: Set<String> = ["process", "host", "domain", "ip", "port", "proto", "profile", "for", "note", "name", "limit", "seconds"]
+    static let valueOptions: Set<String> = ["process", "host", "domain", "ip", "port", "proto", "profile", "for", "note", "name", "limit", "seconds", "days"]
 
     init(_ raw: [String]) throws {
         var iterator = raw.makeIterator()
@@ -270,6 +276,53 @@ func run(_ args: Arguments) async throws {
     case "resume":
         _ = try await newState(client, .pauseProtection(until: nil))
         print("Protection resumed.")
+
+    case "learn":
+        guard let value = rest.first else { throw CLIError("Use: argus learn 3d|7d|off") }
+        let until: Date? = value == "off" ? nil : Date().addingTimeInterval(try parseDuration(value))
+        _ = try await newState(client, .setLearning(until: until))
+        print(until.map { "Learning until \($0.formatted(date: .abbreviated, time: .shortened)): unknown connections are allowed quietly and recorded." } ?? "Learning ended.")
+
+    case "test":
+        guard let host = rest.first else { throw CLIError("Use: argus test HOST [--process NAME]") }
+        var path: String?
+        if let process = args.option("process") { path = try await resolveProcess(process, client: client) }
+        let result = try await client.test(ConnectionTest(processPath: path, host: host, port: UInt16(args.option("port") ?? "") ?? 443))
+        let outcome = result.verdict.map { $0.action == .allow ? "ALLOW" : "DENY" } ?? "ASK"
+        print("\(outcome)  \(result.processName) → \(host): \(result.explanation)")
+        if let advice = result.advice, let suggestion = advice.suggestion, let headline = advice.headline {
+            print("Suggestion: \(suggestion.rawValue) (\(advice.strength)): \(headline)")
+        }
+
+    case "changes":
+        let changes = try await client.recentChanges()
+        guard !changes.isEmpty else {
+            print("No changes yet.")
+            break
+        }
+        table(changes.map { change in
+            [String(change.id), change.date.formatted(date: .omitted, time: .shortened), change.isUndone ? "undone" : "", change.summary]
+        }, header: ["ID", "TIME", "", "CHANGE"])
+
+    case "undo":
+        let changes = try await client.recentChanges()
+        let target = try rest.first.map { text -> ChangeRecord in
+            guard let id = UInt64(text), let change = changes.first(where: { $0.id == id }) else { throw CLIError("No change with ID \(text) (see `argus changes`).") }
+            return change
+        } ?? changes.first { !$0.isUndone }
+        guard let target else { throw CLIError("Nothing to undo.") }
+        _ = try await send(client, .undoChange(target.id))
+        print("Undid: \(target.summary)")
+
+    case "report":
+        let digest = try await client.digest(days: Int(args.option("days") ?? "") ?? 7)
+        print("\(digest.days.first?.day ?? "") to \(digest.days.last?.day ?? ""):")
+        print("  \(digest.connections.formatted()) connections, \(digest.blocked.formatted()) blocked (\(digest.blockedByLists.formatted()) by blocklists)")
+        print("  ↓ \(Formatting.bytes(digest.bytesIn))  ↑ \(Formatting.bytes(digest.bytesOut))")
+        if !digest.topBlockedDomains.isEmpty {
+            print("  Most blocked: " + digest.topBlockedDomains.prefix(5).map { "\($0.name) (\($0.count))" }.joined(separator: ", "))
+        }
+        if !digest.newApps.isEmpty { print("  New apps: " + digest.newApps.joined(separator: ", ")) }
 
     case "blocked":
         let state = try await client.state()

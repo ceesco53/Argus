@@ -10,19 +10,56 @@ struct RulesView: View {
     @State private var editing: Rule?
     @State private var isNew = false
     @State private var sortOrder = [KeyPathComparator(\RuleRow.processName)]
+    @AppStorage("rulesGroupedByProgram") private var groupByProgram = false
 
     enum Filter: String, CaseIterable, Identifiable {
         case all = "All Rules", allow = "Allow", deny = "Deny", temporary = "Temporary", groups = "From Rule Groups", disabled = "Disabled"
+        case problems = "Problems"
         var id: String { rawValue }
     }
 
+    /// Duplicates and rules that can never apply.
+    private var issues: [UUID: RuleIssue] { RuleAnalysis.issues(in: model.state.rules) }
+
     var body: some View {
         @Bindable var model = model
+        let issues = self.issues
         VStack(spacing: 0) {
             if model.engine == .monitor {
                 MonitorModeBanner(compact: true).padding([.horizontal, .top], 16).padding(.bottom, 8)
             }
+            if groupByProgram {
+                groupedList(issues: issues)
+            } else {
+                table(issues: issues)
+            }
+        }
+        .navigationTitle("Rules")
+        .navigationSubtitle("\(model.state.rules.count) rules")
+        .searchable(text: $model.ruleSearch, placement: .toolbar, prompt: "Programs, servers, notes")
+        .toolbar { toolbar(issues: issues) }
+        .sheet(item: $editing) { rule in
+            RuleEditor(rule: rule, isNew: isNew)
+        }
+    }
+
+    private func issueIcon(_ issue: RuleIssue?) -> some View {
+        Group {
+            if let issue {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .help(issue.explanation)
+                    .accessibilityLabel(issue.explanation)
+            }
+        }
+    }
+
+    private func table(issues: [UUID: RuleIssue]) -> some View {
             Table(rows.sorted(using: sortOrder), selection: $selection, sortOrder: $sortOrder) {
+                TableColumn("") { row in
+                    issueIcon(issues[row.id])
+                }
+                .width(16)
                 TableColumn("On") { row in
                     Toggle("Enabled", isOn: Binding(
                         get: { row.rule.isEnabled },
@@ -98,12 +135,80 @@ struct RulesView: View {
                                            description: Text("Rules appear when you answer alerts or use the monitor's allow and deny buttons."))
                 }
             }
+    }
+
+    /// Each program's rules in its own section, any-program rules first.
+    private func groupedList(issues: [UUID: RuleIssue]) -> some View {
+        let groups = Dictionary(grouping: rows, by: \.processName)
+            .sorted { a, b in
+                let anyA = a.value.first?.rule.process == .any, anyB = b.value.first?.rule.process == .any
+                return anyA != anyB ? anyA : a.key.localizedCaseInsensitiveCompare(b.key) == .orderedAscending
+            }
+        return List(selection: $selection) {
+            ForEach(groups, id: \.key) { name, rows in
+                Section {
+                    ForEach(rows) { row in
+                        HStack(spacing: 10) {
+                            Toggle("Enabled", isOn: Binding(
+                                get: { row.rule.isEnabled },
+                                set: { value in Task { await model.setRules([row.id], enabled: value) } }))
+                                .labelsHidden()
+                                .disabled(row.rule.isFromRuleGroup)
+                            Image(systemName: row.rule.action == .allow ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                                .foregroundStyle(row.rule.action == .allow ? Color.allowed : Color.denied)
+                                .accessibilityLabel(row.rule.action.displayName)
+                            Text(row.serverName).lineLimit(1).truncationMode(.middle)
+                            Text(row.portName).foregroundStyle(.secondary)
+                            Spacer()
+                            if row.rule.expiration.isTemporary {
+                                Label(row.rule.expiration.displayString, systemImage: "timer").font(.caption).foregroundStyle(.orange)
+                            }
+                            Text(row.profileName).font(.caption).foregroundStyle(.secondary)
+                            issueIcon(issues[row.id])
+                        }
+                        .tag(row.id)
+                    }
+                } header: {
+                    HStack(spacing: 6) {
+                        if let path = rows.first?.rule.process.path {
+                            AppIconView(identity: model.identity(for: path), size: 16)
+                        } else {
+                            Image(systemName: "square.grid.2x2")
+                        }
+                        Text(name)
+                        Text("\(rows.count)").foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
-        .navigationTitle("Rules")
-        .navigationSubtitle("\(model.state.rules.count) rules")
-        .searchable(text: $model.ruleSearch, placement: .toolbar, prompt: "Programs, servers, notes")
-        .toolbar {
+        .listStyle(.inset)
+        .contextMenu(forSelectionType: Rule.ID.self) { ids in
+            menu(for: ids)
+        } primaryAction: { ids in
+            if let id = ids.first, let rule = model.rule(id: id), !rule.isFromRuleGroup { edit(rule) }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func toolbar(issues: [UUID: RuleIssue]) -> some ToolbarContent {
+            let duplicates = issues.compactMap { id, issue -> UUID? in if case .duplicate = issue { id } else { nil } }
             ToolbarItemGroup {
+                if !duplicates.isEmpty {
+                    Button("Remove \(duplicates.count) Duplicate\(duplicates.count == 1 ? "" : "s")") {
+                        Task { await model.deleteRules(duplicates) }
+                    }
+                    .help("Rules that do exactly what an older rule already does")
+                }
+                Toggle(isOn: $groupByProgram) {
+                    Label("Group by Program", systemImage: "rectangle.grid.1x2")
+                }
+                .help("Group rules by the program they apply to")
+                Button {
+                    model.showChanges = true
+                } label: {
+                    Label("History", systemImage: "clock.arrow.circlepath")
+                }
+                .help("Recent changes, with undo")
                 Picker("Show", selection: $filter) {
                     ForEach(Filter.allCases) { Text($0.rawValue).tag($0) }
                 }
@@ -135,16 +240,13 @@ struct RulesView: View {
                     Label("Export", systemImage: "square.and.arrow.up")
                 }
             }
-        }
-        .sheet(item: $editing) { rule in
-            RuleEditor(rule: rule, isNew: isNew)
-        }
     }
 
     // MARK: Rows
 
     private var rows: [RuleRow] {
         let term = model.ruleSearch.lowercased()
+        let issues = filter == .problems ? self.issues : [:]
         let groupRules = model.state.ruleGroups.filter(\.isEnabled).flatMap(\.rules)
         let all = (filter == .groups ? groupRules : model.state.rules + (filter == .all ? groupRules : []))
         return all.filter { rule in
@@ -154,6 +256,7 @@ struct RulesView: View {
             case .deny: rule.action == .deny
             case .temporary: rule.expiration.isTemporary
             case .disabled: !rule.isEnabled
+            case .problems: issues[rule.id] != nil
             }
         }.filter { rule in
             switch profileFilter {

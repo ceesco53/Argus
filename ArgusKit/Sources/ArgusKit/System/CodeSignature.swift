@@ -4,7 +4,7 @@ import Security
 /// Identifies programs by their code signature and checks them against stored requirements.
 public enum CodeSignature {
     private static let identityCache = Locked<[String: ProcessIdentity]>([:])
-    private static let requirementCache = Locked<[String: Bool]>([:])
+    private static let requirementCache = Locked<[String: RequirementCheck]>([:])
 
     /// Identity of a running process. `auditToken` is preferred because PIDs can be reused.
     public static func identity(auditToken: Data?, pid: Int32, path knownPath: String? = nil) -> ProcessIdentity {
@@ -27,21 +27,35 @@ public enum CodeSignature {
         describe(path: path, code: nil)
     }
 
-    /// Whether the running process still satisfies `requirement`.
-    public static func satisfies(requirement text: String, auditToken: Data?, pid: Int32) -> Bool {
-        let instance = "\(pid):\(ProcessLookup.startTime(pid: pid) ?? 0):\(text)"
-        if let cached = requirementCache.withLock({ $0[instance] }) { return cached }
+    /// The outcome of checking a running process against a stored requirement.
+    public enum RequirementCheck: Sendable, Equatable {
+        case satisfied
+        /// It runs code that isn't what the requirement describes: it was replaced or tampered with.
+        case violated
+        /// The process quit, or its program was updated or removed while it ran, so there's
+        /// nothing on disk left to check it against.
+        case unverifiable
+    }
+
+    /// Checks the running process against `requirement`.
+    public static func check(requirement text: String, auditToken: Data?, pid: Int32) -> RequirementCheck {
+        let instance = AuditToken(auditToken).map { "\($0.pid)v\($0.pidVersion)" } ?? "\(pid):\(ProcessLookup.startTime(pid: pid) ?? 0)"
+        let key = "\(instance):\(text)"
+        if let cached = requirementCache.withLock({ $0[key] }) { return cached }
         var requirement: SecRequirement?
-        guard SecRequirementCreateWithString(text as CFString, [], &requirement) == errSecSuccess, let requirement else { return false }
-        let result: Bool
-        if let code = dynamicCode(auditToken: auditToken, pid: pid) {
-            result = SecCodeCheckValidity(code, [], requirement) == errSecSuccess
-        } else {
-            result = false
+        guard SecRequirementCreateWithString(text as CFString, [], &requirement) == errSecSuccess, let requirement else { return .violated }
+        guard let code = dynamicCode(auditToken: auditToken, pid: pid) else { return .unverifiable }
+        let result: RequirementCheck = switch SecCodeCheckValidity(code, [], requirement) {
+        case errSecSuccess: .satisfied
+        case errSecCSReqFailed, errSecCSSignatureFailed, errSecCSSignatureInvalid, errSecCSUnsigned: .violated
+        // errSecCSStaticCodeChanged and friends: an update replaced the file under the running process.
+        default: .unverifiable
         }
-        requirementCache.withLock { cache in
-            if cache.count > 4096 { cache.removeAll(keepingCapacity: true) }
-            cache[instance] = result
+        if result != .unverifiable {
+            requirementCache.withLock { cache in
+                if cache.count > 4096 { cache.removeAll(keepingCapacity: true) }
+                cache[key] = result
+            }
         }
         return result
     }

@@ -15,16 +15,24 @@
 		24A995034C6F55DB5FBAA0A0 /* AlertView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 991E2728655874704483C423 /* AlertView.swift */; };
 		2544540007AA2792F8F4307B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A5A183F938BCB29AB14C7EF /* SettingsView.swift */; };
 		297F533A5D3B631440E29B44 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 766D499B513D46D821809F08 /* AppDelegate.swift */; };
+		3049DBC4CD921F685F96B388 /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28FED92CB57BC0A21058B396 /* ReviewView.swift */; };
 		30E877438349E690423641F2 /* BlocklistsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D055DA3B60FC3108D3A411E5 /* BlocklistsView.swift */; };
+		374116BE8F1CCF638DC362EA /* CloudSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 162B9CACA1C0F3577526FF6B /* CloudSync.swift */; };
 		3C40B8389F47E3E306FE031F /* ArgusCLI in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = D8DF59BD0D36B0127CDDAF70 /* ArgusCLI */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		481D8084EF01D5698A529A21 /* MonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58EAE45C098A5ADCFD41A6DC /* MonitorView.swift */; };
 		4D1453BDE6F95CEB441DE001 /* MonitorEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4AA39005AEE5D627A52F23 /* MonitorEngine.swift */; };
+		507776F989A17CB0D51395E0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C46B327656627D8D71A2C84F /* Assets.xcassets */; };
 		50F6B25472890B2CE7A86800 /* ArgusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10818EB6FE9BF83CFC040732 /* ArgusApp.swift */; };
+		56FD7D4DFCAC6631D564748B /* HealthMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57D51665FE0536CA01946C9B /* HealthMonitor.swift */; };
 		639E26268DF51D8DD142F5C4 /* NetworkWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B1EC1FEDDA27E350167D38F /* NetworkWatcher.swift */; };
 		71D7A9A6CDE6ADB86D7CCD53 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E372DDD7ACEB3928846A6300 /* MenuBarView.swift */; };
 		7DAD973268FC19094DA3DC12 /* RuleEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C695F7D2747A571B5D7BF47 /* RuleEditor.swift */; };
+		8304546B7E67C43E10FE55A5 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 7E01DDC63C9C19FD3FB117D0 /* Sparkle */; };
 		844517991607AE8C5E880264 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83AA1E4E5B245C25B7B9A72E /* OverviewView.swift */; };
 		893CDF223CF05258D7FD350C /* FilterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2E66FA5E8E33C34E87B7FDB /* FilterManager.swift */; };
+		91BDBBF5A24D82EB1AAF9377 /* DigestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E467072C35B7483F00A6C62 /* DigestView.swift */; };
+		92A315CAAC2055129FD7C5AD /* TroubleshootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCF1665F899DFCCC9E262BF4 /* TroubleshootView.swift */; };
+		94866F0BF031C1C736373096 /* ArgusWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE4FB657F013143A3F0D60E0 /* ArgusWidgets.swift */; };
 		97CF0662422444FCABEEB4AA /* FilterDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71ACE1B534654C019686FEEE /* FilterDataProvider.swift */; };
 		9814F2BED40D678AAEA4A438 /* NetworkExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B4B8F05C3EB2132491F5E533 /* NetworkExtension.framework */; };
 		98629D1FDEF4EEE0161A537E /* ArgusFilter.systemextension in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = 47DCE55F9EE1295A05A7D7D6 /* ArgusFilter.systemextension */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -34,12 +42,19 @@
 		A3C0CDAFBB4F34FEEF031ECA /* GeoLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35401880333E9393CDB2F3AE /* GeoLocator.swift */; };
 		A5F35474F5E8CCD076612C9C /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0179AA25C1A995D10783111D /* Components.swift */; };
 		A6D269D69EE6E1735952A6AA /* ArgusKit in Frameworks */ = {isa = PBXBuildFile; productRef = F95EB9125364A8B1D0C4451A /* ArgusKit */; };
+		AA86B2BF1B7DDF779F92D74F /* ArgusWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 86297AD60BFC6A661E3DDDE0 /* ArgusWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AC3E0F56F3E2F87574566ED2 /* Intents.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4A58A38E74FC1139DAD0E0 /* Intents.swift */; };
+		BDAD3C2CD8968D43B2002BB5 /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 246DA0F08B2E7438F11B81A2 /* Notifier.swift */; };
+		C4BBA8A048C069CA647CFDE3 /* Updater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81C32720F52E3207F0B16707 /* Updater.swift */; };
 		C8C731513F14803F545C1593 /* ArgusKit in Frameworks */ = {isa = PBXBuildFile; productRef = BFADD6F4F7E320EDA1048813 /* ArgusKit */; };
 		D35C1A0AE42B8588626875B1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C46B327656627D8D71A2C84F /* Assets.xcassets */; };
 		E48772C3144799FEDA9B5B11 /* ArgusKit in Frameworks */ = {isa = PBXBuildFile; productRef = B2B3DA16B00FACBAB8B9051D /* ArgusKit */; };
+		E4BD5190F46D0539F1F37F5B /* RecentChangesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0BFA1A635A47B7367AF564 /* RecentChangesView.swift */; };
+		E6963261AA392C67BD5817D6 /* BusyDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0947767483435D5A805EA37D /* BusyDetector.swift */; };
 		F4D4EB44E1E274366B2B3918 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7D690E7FDFB3B76CA1B4A5B /* AppModel.swift */; };
 		F58DA670008392C060F57782 /* NettopMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21B97B7C808C144E09A7EA52 /* NettopMonitor.swift */; };
 		F8B5EFAB6F504CCEEDECC2DA /* CaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF78FCFC0AD314E8EBC40F3F /* CaptureView.swift */; };
+		FBAFC3F9E60B7CD92EF6B35A /* ArgusKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7CB2B27101DAE7928FEE001F /* ArgusKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -49,6 +64,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = F77D1FD3197830E665214946;
 			remoteInfo = ArgusFilter;
+		};
+		A1E5CDAB4A5A98B4D7CA5B91 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7317CB3691AAD002D5B8FA9F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DB87B1BC578B894DF12E52ED;
+			remoteInfo = ArgusWidgets;
 		};
 		F4961203133EFF840046CDBF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -82,29 +104,50 @@
 			name = "Embed Dependencies";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E6A2E3EB9A5ECFBF54FAD679 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				AA86B2BF1B7DDF779F92D74F /* ArgusWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0179AA25C1A995D10783111D /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		0947767483435D5A805EA37D /* BusyDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BusyDetector.swift; sourceTree = "<group>"; };
 		10818EB6FE9BF83CFC040732 /* ArgusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArgusApp.swift; sourceTree = "<group>"; };
+		162B9CACA1C0F3577526FF6B /* CloudSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSync.swift; sourceTree = "<group>"; };
 		18FAC5B5E93303BDDBFB4FC1 /* MainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindow.swift; sourceTree = "<group>"; };
 		1B1EC1FEDDA27E350167D38F /* NetworkWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkWatcher.swift; sourceTree = "<group>"; };
 		21B97B7C808C144E09A7EA52 /* NettopMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NettopMonitor.swift; sourceTree = "<group>"; };
+		246DA0F08B2E7438F11B81A2 /* Notifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifier.swift; sourceTree = "<group>"; };
+		28FED92CB57BC0A21058B396 /* ReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewView.swift; sourceTree = "<group>"; };
 		35401880333E9393CDB2F3AE /* GeoLocator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeoLocator.swift; sourceTree = "<group>"; };
 		47DCE55F9EE1295A05A7D7D6 /* ArgusFilter.systemextension */ = {isa = PBXFileReference; explicitFileType = "wrapper.system-extension"; includeInIndex = 0; path = ArgusFilter.systemextension; sourceTree = BUILT_PRODUCTS_DIR; };
+		4A0BFA1A635A47B7367AF564 /* RecentChangesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentChangesView.swift; sourceTree = "<group>"; };
 		4E4AA39005AEE5D627A52F23 /* MonitorEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonitorEngine.swift; sourceTree = "<group>"; };
 		57A985C9096BDFCC4C39255A /* Argus.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Argus.xcconfig; sourceTree = "<group>"; };
+		57D51665FE0536CA01946C9B /* HealthMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMonitor.swift; sourceTree = "<group>"; };
 		58EAE45C098A5ADCFD41A6DC /* MonitorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonitorView.swift; sourceTree = "<group>"; };
 		5C695F7D2747A571B5D7BF47 /* RuleEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleEditor.swift; sourceTree = "<group>"; };
+		6E467072C35B7483F00A6C62 /* DigestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigestView.swift; sourceTree = "<group>"; };
 		71ACE1B534654C019686FEEE /* FilterDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterDataProvider.swift; sourceTree = "<group>"; };
 		766D499B513D46D821809F08 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		81C32720F52E3207F0B16707 /* Updater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Updater.swift; sourceTree = "<group>"; };
 		83AA1E4E5B245C25B7B9A72E /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
+		86297AD60BFC6A661E3DDDE0 /* ArgusWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ArgusWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8A5A183F938BCB29AB14C7EF /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		93930D63C96333CBC93CABC7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		991E2728655874704483C423 /* AlertView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertView.swift; sourceTree = "<group>"; };
 		993038FF837D5E46395CF754 /* Argus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Argus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1FC1BF81D3C7A30B4D23029 /* ProfilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilesView.swift; sourceTree = "<group>"; };
 		B4B8F05C3EB2132491F5E533 /* NetworkExtension.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = NetworkExtension.framework; path = System/Library/Frameworks/NetworkExtension.framework; sourceTree = SDKROOT; };
+		BE4FB657F013143A3F0D60E0 /* ArgusWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArgusWidgets.swift; sourceTree = "<group>"; };
 		BFF2B010736276EA7F871EC5 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		C46B327656627D8D71A2C84F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CB721AD85110FFA80D809A83 /* MapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapView.swift; sourceTree = "<group>"; };
@@ -112,6 +155,7 @@
 		D7418D44A911B115827E28C0 /* ArgusKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ArgusKit; path = ArgusKit; sourceTree = SOURCE_ROOT; };
 		D7D690E7FDFB3B76CA1B4A5B /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		D8DF59BD0D36B0127CDDAF70 /* ArgusCLI */ = {isa = PBXFileReference; includeInIndex = 0; path = ArgusCLI; sourceTree = BUILT_PRODUCTS_DIR; };
+		DC4A58A38E74FC1139DAD0E0 /* Intents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Intents.swift; sourceTree = "<group>"; };
 		DF2AC2DCBA8828A1CC3C85AD /* SecurityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityView.swift; sourceTree = "<group>"; };
 		DF78FCFC0AD314E8EBC40F3F /* CaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureView.swift; sourceTree = "<group>"; };
 		E23D971081B2182730CB0780 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -119,6 +163,7 @@
 		E372DDD7ACEB3928846A6300 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		F2E66FA5E8E33C34E87B7FDB /* FilterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterManager.swift; sourceTree = "<group>"; };
 		FA17483DBDEC3AB9248BC081 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		FCF1665F899DFCCC9E262BF4 /* TroubleshootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TroubleshootView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -144,6 +189,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				C8C731513F14803F545C1593 /* ArgusKit in Frameworks */,
+				8304546B7E67C43E10FE55A5 /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D35D664D5FC5D6F10AA25B55 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FBAFC3F9E60B7CD92EF6B35A /* ArgusKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -172,6 +226,7 @@
 				5EBA3B7DBE997BEE1E0BC4D6 /* Argus */,
 				345161AF1BAEF6759E549B57 /* ArgusCLI */,
 				C158E17EF8BBE93B47AF90DB /* ArgusFilter */,
+				B8D5C43C006AF766407C094B /* ArgusWidgets */,
 				8A0528ECDA1A9984389DA607 /* Config */,
 				B6D5391C69F20FB1A0674A00 /* Packages */,
 				F494E868A2AE2F17ABFC81CD /* Frameworks */,
@@ -193,6 +248,7 @@
 				993038FF837D5E46395CF754 /* Argus.app */,
 				D8DF59BD0D36B0127CDDAF70 /* ArgusCLI */,
 				47DCE55F9EE1295A05A7D7D6 /* ArgusFilter.systemextension */,
+				86297AD60BFC6A661E3DDDE0 /* ArgusWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -224,6 +280,7 @@
 				D055DA3B60FC3108D3A411E5 /* BlocklistsView.swift */,
 				DF78FCFC0AD314E8EBC40F3F /* CaptureView.swift */,
 				0179AA25C1A995D10783111D /* Components.swift */,
+				6E467072C35B7483F00A6C62 /* DigestView.swift */,
 				18FAC5B5E93303BDDBFB4FC1 /* MainWindow.swift */,
 				CB721AD85110FFA80D809A83 /* MapView.swift */,
 				E372DDD7ACEB3928846A6300 /* MenuBarView.swift */,
@@ -231,10 +288,13 @@
 				BFF2B010736276EA7F871EC5 /* OnboardingView.swift */,
 				83AA1E4E5B245C25B7B9A72E /* OverviewView.swift */,
 				B1FC1BF81D3C7A30B4D23029 /* ProfilesView.swift */,
+				4A0BFA1A635A47B7367AF564 /* RecentChangesView.swift */,
+				28FED92CB57BC0A21058B396 /* ReviewView.swift */,
 				5C695F7D2747A571B5D7BF47 /* RuleEditor.swift */,
 				E25EBB920920346E7DBCB0FE /* RulesView.swift */,
 				DF2AC2DCBA8828A1CC3C85AD /* SecurityView.swift */,
 				8A5A183F938BCB29AB14C7EF /* SettingsView.swift */,
+				FCF1665F899DFCCC9E262BF4 /* TroubleshootView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -245,6 +305,14 @@
 				D7418D44A911B115827E28C0 /* ArgusKit */,
 			);
 			name = Packages;
+			sourceTree = "<group>";
+		};
+		B8D5C43C006AF766407C094B /* ArgusWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				BE4FB657F013143A3F0D60E0 /* ArgusWidgets.swift */,
+			);
+			path = ArgusWidgets;
 			sourceTree = "<group>";
 		};
 		C158E17EF8BBE93B47AF90DB /* ArgusFilter */ = {
@@ -262,6 +330,8 @@
 			children = (
 				766D499B513D46D821809F08 /* AppDelegate.swift */,
 				10818EB6FE9BF83CFC040732 /* ArgusApp.swift */,
+				DC4A58A38E74FC1139DAD0E0 /* Intents.swift */,
+				81C32720F52E3207F0B16707 /* Updater.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -269,11 +339,15 @@
 		DBDC106EAC65B5B20B1497FE /* Engine */ = {
 			isa = PBXGroup;
 			children = (
+				0947767483435D5A805EA37D /* BusyDetector.swift */,
+				162B9CACA1C0F3577526FF6B /* CloudSync.swift */,
 				F2E66FA5E8E33C34E87B7FDB /* FilterManager.swift */,
 				35401880333E9393CDB2F3AE /* GeoLocator.swift */,
+				57D51665FE0536CA01946C9B /* HealthMonitor.swift */,
 				4E4AA39005AEE5D627A52F23 /* MonitorEngine.swift */,
 				21B97B7C808C144E09A7EA52 /* NettopMonitor.swift */,
 				1B1EC1FEDDA27E350167D38F /* NetworkWatcher.swift */,
+				246DA0F08B2E7438F11B81A2 /* Notifier.swift */,
 			);
 			path = Engine;
 			sourceTree = "<group>";
@@ -296,6 +370,7 @@
 				004BE561CD917026C622A9E8 /* Sources */,
 				5538503E25796E8F402C665E /* Resources */,
 				89A57249F9DF63073DF9E245 /* Frameworks */,
+				E6A2E3EB9A5ECFBF54FAD679 /* Embed Foundation Extensions */,
 				14ECA2E8860DA6635295EC6F /* Embed System Extensions */,
 				D505EE50A62328B49151BA9D /* Embed Dependencies */,
 			);
@@ -303,11 +378,13 @@
 			);
 			dependencies = (
 				C31D8A06E7C8AD5C4097CDF6 /* PBXTargetDependency */,
+				D82B54C2BFDFC9A8BF7003D7 /* PBXTargetDependency */,
 				008C1E97D0A62A2CD60E1F8A /* PBXTargetDependency */,
 			);
 			name = Argus;
 			packageProductDependencies = (
 				BFADD6F4F7E320EDA1048813 /* ArgusKit */,
+				7E01DDC63C9C19FD3FB117D0 /* Sparkle */,
 			);
 			productName = Argus;
 			productReference = 993038FF837D5E46395CF754 /* Argus.app */;
@@ -331,6 +408,26 @@
 			productName = ArgusCLI;
 			productReference = D8DF59BD0D36B0127CDDAF70 /* ArgusCLI */;
 			productType = "com.apple.product-type.tool";
+		};
+		DB87B1BC578B894DF12E52ED /* ArgusWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AC3B765802123D11736C7757 /* Build configuration list for PBXNativeTarget "ArgusWidgets" */;
+			buildPhases = (
+				55D477B734F6B7012B645AB1 /* Sources */,
+				39964F79CB2A49FB01C1F8EE /* Resources */,
+				D35D664D5FC5D6F10AA25B55 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ArgusWidgets;
+			packageProductDependencies = (
+				7CB2B27101DAE7928FEE001F /* ArgusKit */,
+			);
+			productName = ArgusWidgets;
+			productReference = 86297AD60BFC6A661E3DDDE0 /* ArgusWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		F77D1FD3197830E665214946 /* ArgusFilter */ = {
 			isa = PBXNativeTarget;
@@ -368,6 +465,10 @@
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
+					DB87B1BC578B894DF12E52ED = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
 					F77D1FD3197830E665214946 = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
@@ -384,6 +485,7 @@
 			mainGroup = 325E76CB57DF9FB54CCFB2D9;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				100F9F4439B6E01EBF990F5E /* XCRemoteSwiftPackageReference "Sparkle" */,
 				F5B04D4F3599173FAD822F53 /* XCLocalSwiftPackageReference "ArgusKit" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -393,12 +495,21 @@
 			targets = (
 				002B50BE8863B8871A1A0A2C /* Argus */,
 				F77D1FD3197830E665214946 /* ArgusFilter */,
+				DB87B1BC578B894DF12E52ED /* ArgusWidgets */,
 				6E56EBE43E35F0C18F25E564 /* ArgusCLI */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		39964F79CB2A49FB01C1F8EE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				507776F989A17CB0D51395E0 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5538503E25796E8F402C665E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -419,10 +530,15 @@
 				F4D4EB44E1E274366B2B3918 /* AppModel.swift in Sources */,
 				50F6B25472890B2CE7A86800 /* ArgusApp.swift in Sources */,
 				30E877438349E690423641F2 /* BlocklistsView.swift in Sources */,
+				E6963261AA392C67BD5817D6 /* BusyDetector.swift in Sources */,
 				F8B5EFAB6F504CCEEDECC2DA /* CaptureView.swift in Sources */,
+				374116BE8F1CCF638DC362EA /* CloudSync.swift in Sources */,
 				A5F35474F5E8CCD076612C9C /* Components.swift in Sources */,
+				91BDBBF5A24D82EB1AAF9377 /* DigestView.swift in Sources */,
 				893CDF223CF05258D7FD350C /* FilterManager.swift in Sources */,
 				A3C0CDAFBB4F34FEEF031ECA /* GeoLocator.swift in Sources */,
+				56FD7D4DFCAC6631D564748B /* HealthMonitor.swift in Sources */,
+				AC3E0F56F3E2F87574566ED2 /* Intents.swift in Sources */,
 				018465284D4F96CE7D0D21D7 /* MainWindow.swift in Sources */,
 				206E60FE92CD6749A2A384DF /* MapView.swift in Sources */,
 				71D7A9A6CDE6ADB86D7CCD53 /* MenuBarView.swift in Sources */,
@@ -430,13 +546,26 @@
 				481D8084EF01D5698A529A21 /* MonitorView.swift in Sources */,
 				F58DA670008392C060F57782 /* NettopMonitor.swift in Sources */,
 				639E26268DF51D8DD142F5C4 /* NetworkWatcher.swift in Sources */,
+				BDAD3C2CD8968D43B2002BB5 /* Notifier.swift in Sources */,
 				A35F4CB401D70046CB318C7C /* OnboardingView.swift in Sources */,
 				844517991607AE8C5E880264 /* OverviewView.swift in Sources */,
 				0A6853FCACE4CB0072E9368B /* ProfilesView.swift in Sources */,
+				E4BD5190F46D0539F1F37F5B /* RecentChangesView.swift in Sources */,
+				3049DBC4CD921F685F96B388 /* ReviewView.swift in Sources */,
 				7DAD973268FC19094DA3DC12 /* RuleEditor.swift in Sources */,
 				A35D2B8E4E3DE74BD3992932 /* RulesView.swift in Sources */,
 				103626A4392CD7C309BCD6F2 /* SecurityView.swift in Sources */,
 				2544540007AA2792F8F4307B /* SettingsView.swift in Sources */,
+				92A315CAAC2055129FD7C5AD /* TroubleshootView.swift in Sources */,
+				C4BBA8A048C069CA647CFDE3 /* Updater.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		55D477B734F6B7012B645AB1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				94866F0BF031C1C736373096 /* ArgusWidgets.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -469,6 +598,11 @@
 			isa = PBXTargetDependency;
 			target = F77D1FD3197830E665214946 /* ArgusFilter */;
 			targetProxy = 7DF4851BF6D1177D17DE69DC /* PBXContainerItemProxy */;
+		};
+		D82B54C2BFDFC9A8BF7003D7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DB87B1BC578B894DF12E52ED /* ArgusWidgets */;
+			targetProxy = A1E5CDAB4A5A98B4D7CA5B91 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -504,6 +638,25 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "$(ARGUS_BUNDLE_PREFIX).Argus.Filter";
 				PRODUCT_MODULE_NAME = ArgusFilter;
 				PRODUCT_NAME = "$(PRODUCT_BUNDLE_IDENTIFIER)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		658C0EF242291466E8C08536 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = "$(ARGUS_WIDGET_ENTITLEMENTS_$(ARGUS_FILTER_ENABLED))";
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = ArgusWidgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ARGUS_BUNDLE_PREFIX).Argus.Widgets";
+				PRODUCT_NAME = ArgusWidgets;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 			};
@@ -561,7 +714,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 8;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -631,7 +784,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 8;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -664,7 +817,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "$(ARGUS_APP_ENTITLEMENTS_$(ARGUS_FILTER_ENABLED))";
+				CODE_SIGN_ENTITLEMENTS = "$(ARGUS_APP_ENTITLEMENTS_$(ARGUS_FILTER_ENABLED)_$(ARGUS_ICLOUD_ENABLED))";
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = Argus/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -677,12 +830,31 @@
 			};
 			name = Release;
 		};
+		A74942CE8D774545AD318714 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = "$(ARGUS_WIDGET_ENTITLEMENTS_$(ARGUS_FILTER_ENABLED))";
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = ArgusWidgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ARGUS_BUNDLE_PREFIX).Argus.Widgets";
+				PRODUCT_NAME = ArgusWidgets;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
 		BF559AE3A11F2C9BDD07A311 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "$(ARGUS_APP_ENTITLEMENTS_$(ARGUS_FILTER_ENABLED))";
+				CODE_SIGN_ENTITLEMENTS = "$(ARGUS_APP_ENTITLEMENTS_$(ARGUS_FILTER_ENABLED)_$(ARGUS_ICLOUD_ENABLED))";
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = Argus/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -742,6 +914,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		AC3B765802123D11736C7757 /* Build configuration list for PBXNativeTarget "ArgusWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				658C0EF242291466E8C08536 /* Debug */,
+				A74942CE8D774545AD318714 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		FF0C19A31823396699079CE5 /* Build configuration list for PBXNativeTarget "Argus" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -760,7 +941,27 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		100F9F4439B6E01EBF990F5E /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		7CB2B27101DAE7928FEE001F /* ArgusKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ArgusKit;
+		};
+		7E01DDC63C9C19FD3FB117D0 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 100F9F4439B6E01EBF990F5E /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
 		B2B3DA16B00FACBAB8B9051D /* ArgusKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ArgusKit;

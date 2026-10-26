@@ -42,6 +42,19 @@ struct ArgusCommands: Commands {
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
             }
         }
+        CommandGroup(after: .appInfo) {
+            if Updater.shared.isConfigured {
+                Button("Check for Updates…") { Updater.shared.checkForUpdates() }
+            }
+        }
+        CommandGroup(after: .undoRedo) {
+            Button("Undo Last Argus Change") { Task { await model.undoLast() } }
+                .keyboardShortcut("z", modifiers: [.command, .option])
+            Button("Recent Changes…") {
+                model.showChanges = true
+                AppDelegate.showMainWindow()
+            }
+        }
         CommandMenu("Protection") {
             Button(model.state.settings.protectionEnabled ? "Turn Protection Off" : "Turn Protection On") {
                 Task { await model.setProtection(!model.state.settings.protectionEnabled) }
@@ -55,6 +68,16 @@ struct ArgusCommands: Commands {
             .disabled(!model.state.settings.protectionEnabled)
             Button("Resume Protection") { Task { await model.resume() } }
                 .disabled(model.pausedUntil == nil)
+            Divider()
+            Button("Troubleshoot…") { model.troubleshoot(appPath: nil) }
+            Button("Review Apps…") {
+                model.showReview = true
+                AppDelegate.showMainWindow()
+            }
+            Button("Weekly Report…") {
+                model.showDigest = true
+                AppDelegate.showMainWindow()
+            }
             Divider()
             ForEach(FilterMode.allCases, id: \.self) { mode in
                 Button(mode.displayName) { Task { await model.setMode(mode) } }

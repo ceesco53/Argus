@@ -23,7 +23,7 @@ func makeCore(host: EngineHost = .networkExtension) -> (FirewallCore, TestDelega
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("argus-core-\(UUID())")
     let core = FirewallCore(host: host, directory: directory)
     core.bpfScanner = nil
-    core.requirementChecker = { _, _ in true }
+    core.requirementChecker = { _, _ in .satisfied }
     let delegate = TestDelegate()
     core.delegate = delegate
     return (core, delegate)
@@ -119,7 +119,7 @@ let app = ClientContext(userID: 501, pid: 1, role: .app)
 
     @Test func signatureMismatchDeniesAllowRules() async {
         let (core, delegate) = makeCore()
-        core.requirementChecker = { _, _ in false }
+        core.requirementChecker = { _, _ in .violated }
         var rule = Rule(action: .allow, process: .path(unknownApp.path), codeRequirement: "identifier \"com.example.tool\"")
         rule.remote = .any
         _ = await core.handle(.saveRule(rule), client: app, authorization: nil)
@@ -128,7 +128,27 @@ let app = ClientContext(userID: 501, pid: 1, role: .app)
             return
         }
         #expect(verdict.reason == .signatureMismatch(rule.id))
-        #expect(delegate.events.current.contains { if case .notice(let e) = $0 { e.kind == .signatureMismatch } else { false } })
+        _ = core.decide(flowID: UUID(), context: flow(), resume: { _ in })
+        let notices = delegate.events.current.filter { if case .notice(let e) = $0 { e.kind == .signatureMismatch } else { false } }
+        #expect(notices.count == 1) // once per process, not once per connection
+    }
+
+    @Test func programsUpdatedWhileRunningKeepTheirRules() async {
+        let (core, _) = makeCore()
+        core.requirementChecker = { _, _ in .unverifiable }
+        var rule = Rule(action: .allow, process: .path(unknownApp.path), codeRequirement: unknownApp.designatedRequirement)
+        rule.remote = .any
+        _ = await core.handle(.saveRule(rule), client: app, authorization: nil)
+        // Argus read the same signature when it first saw the process: still the same program.
+        #expect(core.decide(flowID: UUID(), context: flow(), resume: { _ in }) == .allow(Verdict(.allow, .rule(rule.id))))
+        // Nothing to go by: blocked, but not accused of being malware.
+        var unread = unknownApp
+        unread.designatedRequirement = nil
+        guard case .deny(let verdict) = core.decide(flowID: UUID(), context: flow(unread), resume: { _ in }) else {
+            Issue.record("expected deny")
+            return
+        }
+        #expect(verdict.reason == .signatureMismatch(rule.id))
     }
 
     @Test func monitorModeObservesWithoutEnforcing() {
@@ -207,6 +227,29 @@ let app = ClientContext(userID: 501, pid: 1, role: .app)
         let (other, _) = makeCore()
         _ = await other.handle(.importBackup(backup, merge: false), client: app, authorization: nil)
         #expect(other.state.rules.map(\.id) == core.state.rules.map(\.id))
+    }
+
+    @Test func mergingBackupsKeepsOneProfilePerName() async throws {
+        let (core, _) = makeCore()
+        let home = try #require(core.state.profiles.first { $0.name == "Home" })
+        _ = await core.handle(.saveRule(Rule(action: .deny, remote: .host("x.com"), profileID: home.id)), client: app, authorization: nil)
+        guard case .data(let backup) = await core.handle(.exportBackup, client: app, authorization: nil) else { return }
+        let (other, _) = makeCore() // its own starter profiles, with different IDs
+        _ = await other.handle(.importBackup(backup, merge: true), client: app, authorization: nil)
+        #expect(other.state.profiles.map(\.name) == ["Home", "Public Wi-Fi"])
+        #expect(other.state.rules.count == core.state.rules.count) // the starter rules aren't added twice
+        let rule = try #require(other.state.rules.first { $0.remote == .host("x.com") })
+        #expect(rule.profileID == other.state.profiles.first?.id)
+    }
+
+    @Test func emptyDuplicateProfilesAreDropped() {
+        var state = FirewallState.initial()
+        let used = Profile(name: "home")
+        state.profiles += [Profile(name: "Public Wi-Fi"), used, Profile(name: "Work"), Profile(name: "Work")]
+        state.rules.append(Rule(action: .allow, remote: .any, profileID: used.id))
+        state.removeEmptyDuplicateProfiles()
+        // The starter Home holds nothing while the imported "home" has a rule; one empty Work stays.
+        #expect(state.profiles.map(\.name) == ["Public Wi-Fi", "home", "Work"])
     }
 
     @Test func statePersists() async {
