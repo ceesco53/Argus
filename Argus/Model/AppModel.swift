@@ -144,6 +144,7 @@ final class AppModel {
         housekeeping = Task { [weak self] in
             var minute = 0
             while !Task.isCancelled {
+                await self?.reconnectFilterIfStranded()
                 if minute % 10 == 0 { await self?.checkHealth() }
                 if minute % 60 == 1 { await self?.checkWeeklyDigest() }
                 minute += 1
@@ -209,6 +210,14 @@ final class AppModel {
                 delay = min(delay * 2, .seconds(30))
             }
         }
+    }
+
+    /// A safety net: if Argus is watching with its own monitor while the filter should be running
+    /// (say its status went stale during an update), check again and switch over.
+    private func reconnectFilterIfStranded() async {
+        guard engine == .monitor, filter.isEntitled, filterRetry == nil else { return }
+        await filter.refresh()
+        if filter.status == .enabled { await connect() }
     }
 
     /// Follows the filter wherever it was installed, enabled or removed from.

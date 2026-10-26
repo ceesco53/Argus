@@ -2,6 +2,7 @@ import ArgusKit
 import Foundation
 import NetworkExtension
 import Observation
+import OSLog
 import Security
 import SystemExtensions
 
@@ -44,6 +45,7 @@ final class FilterManager: NSObject {
     private var deactivating = false
     private var updating = false
     private var resaving = false
+    nonisolated static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Argus", category: "filter")
 
     /// The filter requirement the configuration carried when this app last saved it.
     private static let savedRequirementKey = "filterConfigurationRequirement"
@@ -118,8 +120,10 @@ final class FilterManager: NSObject {
             do {
                 try await manager.saveToPreferences()
                 UserDefaults.standard.set(requirement, forKey: FilterManager.savedRequirementKey)
+                FilterManager.log.info("Saved the filter configuration again for a new code signature")
                 return true
             } catch where attempt < 3 {
+                FilterManager.log.error("Saving the filter configuration failed, trying again: \(error.localizedDescription, privacy: .public)")
                 try? await Task.sleep(for: .seconds(1))
             } catch {
                 status = .failed("Argus couldn't turn its network filter back on: \(error.localizedDescription)")
@@ -202,7 +206,12 @@ final class FilterManager: NSObject {
 
     fileprivate func finished() {
         if updating {
+            // macOS may have passed through "needs approval" on the way (it does when the new filter
+            // is signed differently, then reuses the earlier approval), so look again rather than
+            // keep whatever the status was last set to.
+            FilterManager.log.info("Filter update finished")
             updating = false
+            Task { await refresh() }
             return
         }
         if deactivating {
@@ -215,7 +224,9 @@ final class FilterManager: NSObject {
     fileprivate func failed(_ error: Error) {
         let code = (error as NSError).code
         if updating {
+            FilterManager.log.error("Filter update failed: \(error.localizedDescription, privacy: .public)")
             updating = false // the installed filter keeps running
+            Task { await refresh() }
             return
         }
         if code == OSSystemExtensionError.Code.requestCanceled.rawValue {
@@ -237,6 +248,7 @@ extension FilterManager: OSSystemExtensionRequestDelegate {
     }
 
     nonisolated func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
+        FilterManager.log.info("The filter request needs approval")
         Task { @MainActor in self.status = .awaitingApproval }
     }
 
