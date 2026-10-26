@@ -1,7 +1,8 @@
 import Foundation
 
 public enum ArgusVersion {
-    public static let marketing = "1.0"
+    /// The version of the program the engine runs in (the filter or the app).
+    public static let marketing = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
     public static let protocolVersion = 1
 }
 

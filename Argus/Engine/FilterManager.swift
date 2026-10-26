@@ -43,6 +43,24 @@ final class FilterManager: NSObject {
     let machServiceName: String?
     private var deactivating = false
     private var updating = false
+    private var resaving = false
+
+    /// The filter requirement the configuration carried when this app last saved it.
+    private static let savedRequirementKey = "filterConfigurationRequirement"
+
+    /// The code requirement of the filter bundled in this copy of Argus. macOS records it when the
+    /// filter configuration is saved, and won't start a filter that doesn't satisfy it.
+    static let bundledFilterRequirement: String? = {
+        let url = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Library/SystemExtensions/\(ArgusPaths.filterBundleIdentifier).systemextension")
+        var code: SecStaticCode?
+        var requirement: SecRequirement?
+        var text: CFString?
+        guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code,
+              SecCodeCopyDesignatedRequirement(code, [], &requirement) == errSecSuccess, let requirement,
+              SecRequirementCopyString(requirement, [], &text) == errSecSuccess else { return nil }
+        return text as String?
+    }()
 
     override init() {
         isEntitled = FilterManager.hasEntitlement("com.apple.developer.system-extension.install")
@@ -68,11 +86,50 @@ final class FilterManager: NSObject {
             if manager.providerConfiguration == nil {
                 if status != .installing, status != .awaitingApproval { status = .notInstalled }
             } else {
+                if manager.isEnabled, await !saveAgainIfSignatureChanged(manager) { return } // status says why
                 status = manager.isEnabled ? .enabled : .disabled
             }
         } catch {
             status = .failed(error.localizedDescription)
         }
+    }
+
+    /// An update signed differently (a Developer ID release replacing a development build, or a new
+    /// certificate) leaves macOS holding the old signature, and it refuses to start the new filter
+    /// ("does not satisfy the code signature requirements"). Switching the configuration off and on
+    /// records the new signature. Only the copy in Applications does this, so a development build
+    /// run from elsewhere can't take the configuration over.
+    /// Returns false when the filter couldn't be switched back on (and says so in `status`).
+    private func saveAgainIfSignatureChanged(_ manager: NEFilterManager) async -> Bool {
+        guard !resaving, Bundle.main.bundleURL.path.hasPrefix("/Applications/"),
+              let requirement = FilterManager.bundledFilterRequirement,
+              UserDefaults.standard.string(forKey: FilterManager.savedRequirementKey) != requirement else { return true }
+        resaving = true
+        defer { resaving = false }
+        manager.isEnabled = false
+        do {
+            try await manager.saveToPreferences()
+        } catch {
+            manager.isEnabled = true // nothing changed; try again next time
+            return true
+        }
+        manager.isEnabled = true
+        for attempt in 1...3 {
+            do {
+                try await manager.saveToPreferences()
+                UserDefaults.standard.set(requirement, forKey: FilterManager.savedRequirementKey)
+                return true
+            } catch where attempt < 3 {
+                try? await Task.sleep(for: .seconds(1))
+            } catch {
+                status = .failed("Argus couldn't turn its network filter back on: \(error.localizedDescription)")
+            }
+        }
+        return false
+    }
+
+    private func recordSavedSignature() {
+        UserDefaults.standard.set(FilterManager.bundledFilterRequirement, forKey: FilterManager.savedRequirementKey)
     }
 
     /// Activates the system extension; macOS may ask the user to approve it in System Settings.
@@ -113,6 +170,7 @@ final class FilterManager: NSObject {
             }
             manager.isEnabled = true
             try await manager.saveToPreferences()
+            recordSavedSignature()
             status = .enabled
         } catch {
             status = .failed(error.localizedDescription)
@@ -125,6 +183,7 @@ final class FilterManager: NSObject {
             try await manager.loadFromPreferences()
             manager.isEnabled = false
             try await manager.saveToPreferences()
+            recordSavedSignature()
             status = .disabled
         } catch {
             status = .failed(error.localizedDescription)
