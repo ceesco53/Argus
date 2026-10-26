@@ -7,9 +7,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     private var alertPanel: AlertPanelController?
     private var windowObserver: NSObjectProtocol?
+    private var termsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppModel.shared = model
+        // Nothing starts (engine, alerts, menu bar item) until the terms are accepted.
+        guard Terms.isAccepted else {
+            presentTerms()
+            return
+        }
+        launch()
+    }
+
+    /// The first-run agreement. Declining quits Argus.
+    private func presentTerms() {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 660), styleMask: [.titled], backing: .buffered, defer: false)
+        window.title = "Argus Terms of Use"
+        window.isReleasedWhenClosed = false
+        let host = NSHostingController(rootView: TermsView(
+            requiresAgreement: true,
+            onAgree: { [weak self] in self?.termsAccepted() },
+            onDecline: { NSApp.terminate(nil) }))
+        host.sizingOptions = []
+        window.contentViewController = host
+        window.setContentSize(NSSize(width: 640, height: 660))
+        window.center()
+        termsWindow = window
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate()
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private func termsAccepted() {
+        Terms.accept()
+        termsWindow?.close()
+        termsWindow = nil
+        launch()
+        Task {
+            // Give SwiftUI a moment to add the menu bar item, which knows how to open windows.
+            try? await Task.sleep(for: .milliseconds(300))
+            if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+                AppDelegate.updateActivationPolicy()
+            } else {
+                AppDelegate.showMainWindow()
+            }
+        }
+    }
+
+    private func launch() {
         alertPanel = AlertPanelController(model: model)
         model.onAlertsChanged = { [weak self] in self?.alertPanel?.update() }
         Task {
@@ -57,6 +102,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if let termsWindow {
+            termsWindow.makeKeyAndOrderFront(nil)
+            return false
+        }
         if !flag { AppDelegate.showMainWindow() }
         return true
     }

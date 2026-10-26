@@ -19,6 +19,7 @@
 		30E877438349E690423641F2 /* BlocklistsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D055DA3B60FC3108D3A411E5 /* BlocklistsView.swift */; };
 		374116BE8F1CCF638DC362EA /* CloudSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 162B9CACA1C0F3577526FF6B /* CloudSync.swift */; };
 		3C40B8389F47E3E306FE031F /* ArgusCLI in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = D8DF59BD0D36B0127CDDAF70 /* ArgusCLI */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		3EF9CAADCC4F46F91384BF97 /* Terms.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6217F62A604785F455475537 /* Terms.swift */; };
 		481D8084EF01D5698A529A21 /* MonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58EAE45C098A5ADCFD41A6DC /* MonitorView.swift */; };
 		4D1453BDE6F95CEB441DE001 /* MonitorEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4AA39005AEE5D627A52F23 /* MonitorEngine.swift */; };
 		507776F989A17CB0D51395E0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C46B327656627D8D71A2C84F /* Assets.xcassets */; };
@@ -135,6 +136,7 @@
 		57D51665FE0536CA01946C9B /* HealthMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthMonitor.swift; sourceTree = "<group>"; };
 		58EAE45C098A5ADCFD41A6DC /* MonitorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonitorView.swift; sourceTree = "<group>"; };
 		5C695F7D2747A571B5D7BF47 /* RuleEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleEditor.swift; sourceTree = "<group>"; };
+		6217F62A604785F455475537 /* Terms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Terms.swift; sourceTree = "<group>"; };
 		6E467072C35B7483F00A6C62 /* DigestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigestView.swift; sourceTree = "<group>"; };
 		71ACE1B534654C019686FEEE /* FilterDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterDataProvider.swift; sourceTree = "<group>"; };
 		766D499B513D46D821809F08 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -331,6 +333,7 @@
 				766D499B513D46D821809F08 /* AppDelegate.swift */,
 				10818EB6FE9BF83CFC040732 /* ArgusApp.swift */,
 				DC4A58A38E74FC1139DAD0E0 /* Intents.swift */,
+				6217F62A604785F455475537 /* Terms.swift */,
 				81C32720F52E3207F0B16707 /* Updater.swift */,
 			);
 			path = App;
@@ -556,6 +559,7 @@
 				A35D2B8E4E3DE74BD3992932 /* RulesView.swift in Sources */,
 				103626A4392CD7C309BCD6F2 /* SecurityView.swift in Sources */,
 				2544540007AA2792F8F4307B /* SettingsView.swift in Sources */,
+				3EF9CAADCC4F46F91384BF97 /* Terms.swift in Sources */,
 				92A315CAAC2055129FD7C5AD /* TroubleshootView.swift in Sources */,
 				C4BBA8A048C069CA647CFDE3 /* Updater.swift in Sources */,
 			);
@@ -714,7 +718,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -784,7 +788,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_HARDENED_RUNTIME = YES;

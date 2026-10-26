@@ -40,6 +40,7 @@ private struct GeneralSettings: View {
     @AppStorage("showRateInMenuBar") private var showRate = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Form {
@@ -64,6 +65,14 @@ private struct GeneralSettings: View {
             Button("Show the Welcome Guide Again") {
                 hasCompletedOnboarding = false
                 AppDelegate.showMainWindow()
+            }
+            Section("Legal") {
+                LabeledContent {
+                    Button("View Terms…") { openWindow(id: "terms") }
+                } label: {
+                    Text("Terms of Use")
+                    Text("Argus was built with AI and comes with no warranty. You use it at your own risk.")
+                }
             }
         }
         .formStyle(.grouped)

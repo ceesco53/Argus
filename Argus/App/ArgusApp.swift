@@ -5,6 +5,9 @@ import SwiftUI
 struct ArgusApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage(Terms.acceptedVersionKey) private var acceptedTermsVersion = 0
+
+    private var termsAccepted: Bool { acceptedTermsVersion >= Terms.version }
 
     var body: some Scene {
         // Argus lives in the menu bar; the main window only opens when asked (or on first run).
@@ -14,7 +17,7 @@ struct ArgusApp: App {
         }
         .defaultSize(width: 1280, height: 800)
         .windowToolbarStyle(.unified)
-        .defaultLaunchBehavior(hasCompletedOnboarding && DebugLaunch.section == nil ? .suppressed : .presented)
+        .defaultLaunchBehavior(termsAccepted && (!hasCompletedOnboarding || DebugLaunch.section != nil) ? .presented : .suppressed)
         .commands { ArgusCommands(model: appDelegate.model) }
 
         Settings {
@@ -22,7 +25,13 @@ struct ArgusApp: App {
                 .environment(appDelegate.model)
         }
 
-        MenuBarExtra {
+        Window("Terms of Use", id: "terms") {
+            TermsView()
+        }
+        .windowResizability(.contentSize)
+        .defaultLaunchBehavior(.suppressed)
+
+        MenuBarExtra(isInserted: .constant(termsAccepted)) {
             MenuBarView()
                 .environment(appDelegate.model)
         } label: {
@@ -34,8 +43,12 @@ struct ArgusApp: App {
 
 struct ArgusCommands: Commands {
     let model: AppModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
+        CommandGroup(after: .help) {
+            Button("Argus Terms of Use") { openWindow(id: "terms") }
+        }
         CommandGroup(after: .sidebar) {
             ForEach(Array(SidebarItem.allCases.enumerated()), id: \.element) { index, item in
                 Button(item.title) { model.section = item }
