@@ -19,6 +19,8 @@ feed="https://github.com/$repository/releases/latest/download/appcast.xml"
 
 touch Config/Local.xcconfig
 sed -i '' '/^ARGUS_UPDATE_PUBLIC_KEY/d;/^ARGUS_UPDATE_FEED_URL/d' Config/Local.xcconfig
+# Don't glue the new settings onto a last line that has no line break.
+[ -s Config/Local.xcconfig ] && [ "$(tail -c 1 Config/Local.xcconfig)" != "" ] && echo >> Config/Local.xcconfig
 printf 'ARGUS_UPDATE_PUBLIC_KEY = %s\nARGUS_UPDATE_FEED_URL = %s\n' "$public_key" "$feed" >> Config/Local.xcconfig
 echo "Update signing is set up."
 echo "  Public key: $public_key"

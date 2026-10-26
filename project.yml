@@ -40,6 +40,23 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Helpers
+    preBuildScripts:
+      # A mistyped switch would otherwise pick no entitlements and quietly build a monitor-only app.
+      - name: Check Build Switches
+        shell: /bin/bash
+        basedOnDependencyAnalysis: false
+        script: |
+          for name in ARGUS_FILTER_ENABLED ARGUS_ICLOUD_ENABLED; do
+            value="${!name}"
+            if [ "$value" != YES ] && [ "$value" != NO ]; then
+              echo "error: $name must be YES or NO, not '$value'. Check Config/Local.xcconfig for two settings on one line."
+              exit 1
+            fi
+          done
+          if [ -z "$CODE_SIGN_ENTITLEMENTS" ]; then
+            echo "error: No entitlements file was chosen for this build. Check the ARGUS_* switches in Config/Local.xcconfig."
+            exit 1
+          fi
     settings:
       base:
         PRODUCT_NAME: Argus

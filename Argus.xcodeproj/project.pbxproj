@@ -370,6 +370,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = FF0C19A31823396699079CE5 /* Build configuration list for PBXNativeTarget "Argus" */;
 			buildPhases = (
+				B5162CB553F835A836A445A7 /* Check Build Switches */,
 				004BE561CD917026C622A9E8 /* Sources */,
 				5538503E25796E8F402C665E /* Resources */,
 				89A57249F9DF63073DF9E245 /* Frameworks */,
@@ -522,6 +523,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		B5162CB553F835A836A445A7 /* Check Build Switches */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Check Build Switches";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "for name in ARGUS_FILTER_ENABLED ARGUS_ICLOUD_ENABLED; do\n  value=\"${!name}\"\n  if [ \"$value\" != YES ] && [ \"$value\" != NO ]; then\n    echo \"error: $name must be YES or NO, not '$value'. Check Config/Local.xcconfig for two settings on one line.\"\n    exit 1\n  fi\ndone\nif [ -z \"$CODE_SIGN_ENTITLEMENTS\" ]; then\n  echo \"error: No entitlements file was chosen for this build. Check the ARGUS_* switches in Config/Local.xcconfig.\"\n  exit 1\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		004BE561CD917026C622A9E8 /* Sources */ = {
