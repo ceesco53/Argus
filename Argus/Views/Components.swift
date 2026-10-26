@@ -1,6 +1,5 @@
 import AppKit
 import ArgusKit
-import Charts
 import SwiftUI
 
 extension Color {
@@ -222,42 +221,136 @@ struct StatTile: View {
 // MARK: - Charts
 
 /// Mirrored area chart: data received above the axis, sent below.
+///
+/// Drawn with Canvas rather than Swift Charts: the live chart redraws every second, and Charts
+/// keeps every axis label it ever made (hundreds of megabytes an hour), which also made each
+/// redraw slower.
 struct TrafficChart: View {
     let buckets: [TrafficBucket]
     var resolution: TrafficResolution = .second
     var height: CGFloat = 160
 
     var body: some View {
-        Chart {
-            ForEach(buckets, id: \.start) { bucket in
-                AreaMark(x: .value("Time", bucket.date), y: .value("Received", perSecond(bucket.bytesIn)), series: .value("Direction", "Received"))
-                    .foregroundStyle(LinearGradient(colors: [.incoming.opacity(0.7), .incoming.opacity(0.15)], startPoint: .top, endPoint: .bottom))
-                    .interpolationMethod(.monotone)
-                AreaMark(x: .value("Time", bucket.date), y: .value("Sent", -perSecond(bucket.bytesOut)), series: .value("Direction", "Sent"))
-                    .foregroundStyle(LinearGradient(colors: [.outgoing.opacity(0.15), .outgoing.opacity(0.7)], startPoint: .top, endPoint: .bottom))
-                    .interpolationMethod(.monotone)
-            }
-            RuleMark(y: .value("Zero", 0)).foregroundStyle(.separator)
-        }
-        .chartYAxis {
-            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
-                AxisGridLine().foregroundStyle(.separator.opacity(0.5))
-                AxisValueLabel {
-                    if let v = value.as(Double.self) { Text(Formatting.rate(abs(v))).font(.caption2) }
-                }
-            }
-        }
-        .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: 6)) { _ in
-                AxisValueLabel(format: resolution == .hour ? .dateTime.month(.abbreviated).day().hour() : .dateTime.hour().minute())
-            }
-        }
-        .frame(height: height)
-        .accessibilityLabel("Network traffic chart")
-        .accessibilityValue("Received \(Formatting.bytes(buckets.reduce(0) { $0 + $1.bytesIn })), sent \(Formatting.bytes(buckets.reduce(0) { $0 + $1.bytesOut }))")
+        Canvas { context, size in draw(in: &context, size: size) }
+            .frame(height: height)
+            .accessibilityElement()
+            .accessibilityLabel("Network traffic chart")
+            .accessibilityValue("Received \(Formatting.bytes(buckets.reduce(0) { $0 + $1.bytesIn })), sent \(Formatting.bytes(buckets.reduce(0) { $0 + $1.bytesOut }))")
     }
 
-    private func perSecond(_ bytes: UInt64) -> Double { Double(bytes) / Double(resolution.seconds) }
+    private func draw(in context: inout GraphicsContext, size: CGSize) {
+        let points = buckets.sorted { $0.start < $1.start }
+        let seconds = Double(resolution.seconds)
+        let received = points.map { Double($0.bytesIn) / seconds }
+        let sent = points.map { -Double($0.bytesOut) / seconds }
+        // At least 4 B/s tall, so a quiet network doesn't get fractional "0 B/s" labels. Steps are
+        // round in the unit the labels use (1 MB/s, not 977 KB/s).
+        let lower = min(0, sent.min() ?? 0), upper = max(4, received.max() ?? 0)
+        var unit = pow(1024, (log(max(-lower, upper)) / log(1024)).rounded(.down))
+        var steps = ChartTicks.values(covering: lower / unit, upper / unit, desiredCount: 4)
+        if steps.contains(where: { abs($0) >= 1000 }) { // 1 MB/s rather than 1,000 KB/s
+            unit *= 1024
+            steps = ChartTicks.values(covering: lower / unit, upper / unit, desiredCount: 4)
+        }
+        let yTicks = steps.map { $0 * unit }
+        guard let yLow = yTicks.first, let yHigh = yTicks.last, yHigh > yLow else { return }
+
+        // Rate labels on the left; time labels underneath.
+        let yLabels = yTicks.map { context.resolve(Text(Formatting.rate(abs($0))).font(.caption2).foregroundStyle(.secondary)) }
+        let labelWidth = yLabels.map { $0.measure(in: size).width }.max() ?? 0
+        let plot = CGRect(x: labelWidth + 6, y: 5, width: max(1, size.width - labelWidth - 6), height: max(1, size.height - 25))
+        func y(_ value: Double) -> CGFloat { plot.maxY - CGFloat((value - yLow) / (yHigh - yLow)) * plot.height }
+
+        for (value, label) in zip(yTicks, yLabels) {
+            var grid = Path()
+            grid.move(to: CGPoint(x: plot.minX, y: y(value)))
+            grid.addLine(to: CGPoint(x: plot.maxX, y: y(value)))
+            context.stroke(grid, with: .style(.separator.opacity(0.5)), lineWidth: 0.5)
+            context.draw(label, at: CGPoint(x: labelWidth, y: y(value)), anchor: .trailing)
+        }
+
+        if let first = points.first?.date, let last = points.last?.date, last > first {
+            let span = last.timeIntervalSince(first)
+            func x(_ date: Date) -> CGFloat { plot.minX + CGFloat(date.timeIntervalSince(first) / span) * plot.width }
+
+            let ticks = ChartTicks.dates(from: first, to: last, desiredCount: 6)
+            // As precise as the spacing: 4:32:30 PM, 4:40 PM or Oct 19, never the same label twice.
+            let step = ticks.count > 1 ? ticks[1].timeIntervalSince(ticks[0]) : span
+            let format: Date.FormatStyle = step < 60 ? .dateTime.hour().minute().second()
+                : step < 86_400 ? .dateTime.hour().minute() : .dateTime.month(.abbreviated).day()
+            for tick in ticks {
+                let label = context.resolve(Text(tick.formatted(format)).font(.caption2).foregroundStyle(.secondary))
+                let half = label.measure(in: size).width / 2
+                let center = min(max(x(tick), plot.minX + half), size.width - half)
+                context.draw(label, at: CGPoint(x: center, y: plot.maxY + 4), anchor: .top)
+            }
+
+            let zero = y(0)
+            func area(_ values: [Double]) -> Path {
+                let line = zip(points, values).map { CGPoint(x: x($0.date), y: y($1)) }
+                var path = Path()
+                path.move(to: CGPoint(x: line[0].x, y: zero))
+                path.addLine(to: line[0])
+                TrafficChart.addMonotoneCurve(through: line, to: &path)
+                path.addLine(to: CGPoint(x: line[line.count - 1].x, y: zero))
+                path.closeSubpath()
+                return path
+            }
+            context.fill(area(received), with: .linearGradient(
+                Gradient(colors: [.incoming.opacity(0.7), .incoming.opacity(0.15)]),
+                startPoint: CGPoint(x: 0, y: plot.minY), endPoint: CGPoint(x: 0, y: zero)))
+            context.fill(area(sent), with: .linearGradient(
+                Gradient(colors: [.outgoing.opacity(0.15), .outgoing.opacity(0.7)]),
+                startPoint: CGPoint(x: 0, y: zero), endPoint: CGPoint(x: 0, y: plot.maxY)))
+        }
+
+        var axis = Path()
+        axis.move(to: CGPoint(x: plot.minX, y: y(0)))
+        axis.addLine(to: CGPoint(x: plot.maxX, y: y(0)))
+        context.stroke(axis, with: .style(.separator), lineWidth: 1)
+    }
+
+    /// A smooth curve through `points` that never overshoots them (monotone cubic interpolation,
+    /// like Charts' `.monotone`). `path` must already be at the first point.
+    static func addMonotoneCurve(through points: [CGPoint], to path: inout Path) {
+        let count = points.count
+        guard count > 2 else {
+            if count == 2 { path.addLine(to: points[1]) }
+            return
+        }
+        let slopes = (0..<count - 1).map { i in
+            let dx = points[i + 1].x - points[i].x
+            return dx == 0 ? 0 : (points[i + 1].y - points[i].y) / dx
+        }
+        var tangents = [CGFloat](repeating: 0, count: count)
+        tangents[0] = slopes[0]
+        tangents[count - 1] = slopes[count - 2]
+        for i in 1..<count - 1 {
+            tangents[i] = slopes[i - 1] * slopes[i] <= 0 ? 0 : (slopes[i - 1] + slopes[i]) / 2
+        }
+        // Fritsch–Carlson: flat segments stay flat, and steep tangents are limited so the curve
+        // can't swing past its neighbours.
+        for i in 0..<count - 1 {
+            guard slopes[i] != 0 else {
+                tangents[i] = 0
+                tangents[i + 1] = 0
+                continue
+            }
+            let a = tangents[i] / slopes[i], b = tangents[i + 1] / slopes[i]
+            let length = a * a + b * b
+            if length > 9 {
+                let scale = 3 / length.squareRoot()
+                tangents[i] = scale * a * slopes[i]
+                tangents[i + 1] = scale * b * slopes[i]
+            }
+        }
+        for i in 0..<count - 1 {
+            let third = (points[i + 1].x - points[i].x) / 3
+            path.addCurve(to: points[i + 1],
+                          control1: CGPoint(x: points[i].x + third, y: points[i].y + tangents[i] * third),
+                          control2: CGPoint(x: points[i + 1].x - third, y: points[i + 1].y - tangents[i + 1] * third))
+        }
+    }
 }
 
 struct ChartLegend: View {

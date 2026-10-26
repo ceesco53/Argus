@@ -345,18 +345,16 @@ final class AppModel {
             log = snapshot.log
             events = snapshot.events
         } else {
+            // Merged in place: copying thousands of records every second was most of the refresh's cost.
             if !snapshot.processes.isEmpty {
-                var updated = processes
-                for process in snapshot.processes { updated[process.id] = process }
-                processes = updated
+                processes.merge(snapshot.processes.lazy.map { ($0.id, $0) }) { _, new in new }
             }
             if !snapshot.connections.isEmpty {
-                var updated = connections
-                for connection in snapshot.connections { updated[connection.id] = connection }
-                connections = updated
+                connections.merge(snapshot.connections.lazy.map { ($0.id, $0) }) { _, new in new }
             }
             if !snapshot.log.isEmpty {
-                log = Array((log + snapshot.log).suffix(1000))
+                log.append(contentsOf: snapshot.log)
+                if log.count > 1000 { log.removeFirst(log.count - 1000) }
                 notifyForegroundBlocks(snapshot.log)
                 if busy.isBusy { decidedWhileBusy += snapshot.log.filter { $0.verdict.reason == .deferred }.count }
             }

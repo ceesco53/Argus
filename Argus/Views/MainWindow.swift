@@ -6,10 +6,22 @@ struct MainWindow: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var showOnboarding = false
     @Environment(\.openWindow) private var openWindow
+    /// SwiftUI keeps a closed window's views alive and updating every second (hundreds of
+    /// megabytes, and steady CPU for an app that mostly sits in the menu bar), so they're
+    /// dropped when the window closes and rebuilt when it opens again.
+    @State private var isOpen = true
 
     var body: some View {
+        Group {
+            if isOpen { content } else { Color.clear }
+        }
+        .onAppear { isOpen = true }
+        .onDisappear { isOpen = false }
+    }
+
+    private var content: some View {
         @Bindable var model = model
-        NavigationSplitView {
+        return NavigationSplitView {
             List(selection: $model.section) {
                 Section("Activity") {
                     row(.overview)

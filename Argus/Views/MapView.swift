@@ -20,19 +20,22 @@ struct ConnectionsMapView: View {
         var servers: [ConnectionRecord] = []
 
         var id: String { country.code }
+
+        mutating func add(_ connection: ConnectionRecord) {
+            bytes += connection.totalBytes
+            connections += connection.connectCount
+            blocked += connection.denyCount
+            programs.insert(connection.processPath)
+            servers.append(connection)
+        }
     }
 
     private var stats: [CountryStats] {
         var byCountry: [String: CountryStats] = [:]
         for connection in model.connections.values {
             guard let country = model.geo.country(for: connection) else { continue }
-            var entry = byCountry[country.code] ?? CountryStats(country: country)
-            entry.bytes += connection.totalBytes
-            entry.connections += connection.connectCount
-            entry.blocked += connection.denyCount
-            entry.programs.insert(connection.processPath)
-            entry.servers.append(connection)
-            byCountry[country.code] = entry
+            // Updated in place: copying an entry out and back made every append copy its servers.
+            byCountry[country.code, default: CountryStats(country: country)].add(connection)
         }
         return byCountry.values.sorted { $0.bytes > $1.bytes }
     }
@@ -53,42 +56,15 @@ struct ConnectionsMapView: View {
 
     private func map(_ stats: [CountryStats]) -> some View {
         let maximum = Double(max(stats.first?.bytes ?? 1, 1))
-        let home = GeoLocator.home
-        return Map(position: $position) {
-            if let home {
-                Annotation("This Mac", coordinate: home) {
-                    MascotView(size: 34).shadow(radius: 3)
-                }
-            }
-            ForEach(stats) { stat in
-                if let coordinate = stat.country.coordinate {
-                    if let home {
-                        MapPolyline(coordinates: [home, coordinate], contourStyle: .geodesic)
-                            .stroke(stat.blocked > 0 && stat.blocked == stat.connections ? Color.denied.opacity(0.5) : Color.accentColor.opacity(0.45),
-                                    lineWidth: 1 + 3 * sqrt(Double(stat.bytes) / maximum))
-                    }
-                    Annotation(stat.country.name, coordinate: coordinate) {
-                        let size = 18 + 34 * sqrt(Double(stat.bytes) / maximum)
-                        Button {
-                            selected = stat.id
-                        } label: {
-                            ZStack {
-                                Circle().fill(Color.accentColor.opacity(selected == stat.id ? 0.55 : 0.3))
-                                Circle().strokeBorder(Color.accentColor, lineWidth: selected == stat.id ? 3 : 1.5)
-                                Text(stat.country.flag).font(.system(size: size * 0.45))
-                            }
-                            .frame(width: size, height: size)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
+        let marks = stats.compactMap { stat -> CountryMap.Mark? in
+            guard let coordinate = stat.country.coordinate else { return nil }
+            // Sizes in 2-point steps: new traffic rarely changes them from one second to the next.
+            let scale = (17 * sqrt(Double(stat.bytes) / maximum)).rounded() / 17
+            return CountryMap.Mark(country: stat.country, latitude: coordinate.latitude, longitude: coordinate.longitude,
+                                   scale: scale, allBlocked: stat.blocked > 0 && stat.blocked == stat.connections)
         }
-        .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
-        .mapControls {
-            MapZoomStepper()
-            MapCompass()
-        }
+        return CountryMap(marks: marks, selected: selected, position: $position) { selected = $0 }
+            .equatable()
     }
 
     private func sidebar(_ stats: [CountryStats]) -> some View {
@@ -157,5 +133,65 @@ struct LocationDatabasePrompt: View {
         .padding(28)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(radius: 20)
+    }
+}
+
+/// The map itself. MapKit redraws everything when its content changes, so it only gets values
+/// that change visibly, and skips updates when they haven't.
+private struct CountryMap: View, Equatable {
+    struct Mark: Equatable, Identifiable, Sendable {
+        let country: Country
+        let latitude: Double
+        let longitude: Double
+        /// Share of the busiest country's traffic, as a square root (circle area follows bytes).
+        let scale: Double
+        let allBlocked: Bool
+
+        var id: String { country.code }
+        var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: latitude, longitude: longitude) }
+    }
+
+    let marks: [Mark]
+    let selected: String?
+    @Binding var position: MapCameraPosition
+    let onSelect: (String) -> Void
+
+    // The binding and callback always point at the same state; only what's drawn matters.
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.marks == rhs.marks && lhs.selected == rhs.selected }
+
+    var body: some View {
+        let home = GeoLocator.home
+        Map(position: $position) {
+            if let home {
+                Annotation("This Mac", coordinate: home) {
+                    MascotView(size: 34).shadow(radius: 3)
+                }
+            }
+            ForEach(marks) { mark in
+                if let home {
+                    MapPolyline(coordinates: [home, mark.coordinate], contourStyle: .geodesic)
+                        .stroke(mark.allBlocked ? Color.denied.opacity(0.5) : Color.accentColor.opacity(0.45), lineWidth: 1 + 3 * mark.scale)
+                }
+                Annotation(mark.country.name, coordinate: mark.coordinate) {
+                    let size = 18 + 34 * mark.scale
+                    Button {
+                        onSelect(mark.id)
+                    } label: {
+                        ZStack {
+                            Circle().fill(Color.accentColor.opacity(selected == mark.id ? 0.55 : 0.3))
+                            Circle().strokeBorder(Color.accentColor, lineWidth: selected == mark.id ? 3 : 1.5)
+                            Text(mark.country.flag).font(.system(size: size * 0.45))
+                        }
+                        .frame(width: size, height: size)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
+        .mapControls {
+            MapZoomStepper()
+            MapCompass()
+        }
     }
 }

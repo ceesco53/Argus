@@ -91,6 +91,9 @@ public final class ActivityTracker: @unchecked Sendable {
         var processPath: String
         var bytesIn: UInt64 = 0
         var bytesOut: UInt64 = 0
+        var lastReport: Date
+        /// Silent so long it no longer counts as open; a later report reopens it.
+        var presumedClosed = false
     }
 
     struct State: Codable, Sendable {
@@ -165,6 +168,11 @@ public final class ActivityTracker: @unchecked Sendable {
     static let eventCapacity = 500
     static let connectionCapacity = 25_000
     static let retention: TimeInterval = 30 * 86_400
+    /// NetworkExtension doesn't always report that a flow ended (for example when its process
+    /// exits), so a flow with no report for this long stops counting as open.
+    static let flowSilenceLimit: TimeInterval = 15 * 60
+    /// …and after this long it's forgotten.
+    static let flowForgetLimit: TimeInterval = 86_400
 
     private let state = Locked(State())
 
@@ -228,7 +236,7 @@ public final class ActivityTracker: @unchecked Sendable {
             if s.log.count > ActivityTracker.logCapacity { s.log.removeFirst(s.log.count - ActivityTracker.logCapacity) }
 
             if tracksFlow, let flowID {
-                s.flows[flowID] = OpenFlow(connectionKey: key, processPath: ctx.process.path)
+                s.flows[flowID] = OpenFlow(connectionKey: key, processPath: ctx.process.path, lastReport: now)
             }
         }
     }
@@ -239,10 +247,16 @@ public final class ActivityTracker: @unchecked Sendable {
             guard var flow = s.flows[id] else { return }
             let deltaIn = totalIn >= flow.bytesIn ? totalIn - flow.bytesIn : 0
             let deltaOut = totalOut >= flow.bytesOut ? totalOut - flow.bytesOut : 0
+            // A flow presumed closed is already off the open counts: don't take it off twice,
+            // and count it again if it turns out to be alive.
+            let wasCounted = !flow.presumedClosed
+            let reopened = !wasCounted && !closed
             flow.bytesIn = max(flow.bytesIn, totalIn)
             flow.bytesOut = max(flow.bytesOut, totalOut)
+            flow.lastReport = now
+            flow.presumedClosed = false
             if closed { s.flows[id] = nil } else { s.flows[id] = flow }
-            guard deltaIn > 0 || deltaOut > 0 || closed else { return }
+            guard deltaIn > 0 || deltaOut > 0 || (closed && wasCounted) || reopened else { return }
 
             s.rollDay(now)
             let revision = s.nextRevision()
@@ -250,7 +264,8 @@ public final class ActivityTracker: @unchecked Sendable {
             if var connection = s.connections[flow.connectionKey] {
                 connection.bytesIn += deltaIn
                 connection.bytesOut += deltaOut
-                if closed { connection.activeFlows = max(0, connection.activeFlows - 1) }
+                if closed && wasCounted { connection.activeFlows = max(0, connection.activeFlows - 1) }
+                if reopened { connection.activeFlows += 1 }
                 if deltaIn + deltaOut > 0 { connection.lastSeen = now }
                 connection.revision = revision
                 s.connections[flow.connectionKey] = connection
@@ -258,7 +273,8 @@ public final class ActivityTracker: @unchecked Sendable {
             if var process = s.processes[flow.processPath] {
                 process.bytesIn += deltaIn
                 process.bytesOut += deltaOut
-                if closed { process.activeFlows = max(0, process.activeFlows - 1) }
+                if closed && wasCounted { process.activeFlows = max(0, process.activeFlows - 1) }
+                if reopened { process.activeFlows += 1 }
                 process.revision = revision
                 s.processes[flow.processPath] = process
             }
@@ -387,6 +403,24 @@ public final class ActivityTracker: @unchecked Sendable {
             s.global.prune(now: time)
             for path in s.perProcess.keys { s.perProcess[path]?.prune(now: time) }
             s.perProcess = s.perProcess.filter { !$0.value.isEmpty }
+
+            let silent = now.addingTimeInterval(-ActivityTracker.flowSilenceLimit)
+            let forgotten = now.addingTimeInterval(-ActivityTracker.flowForgetLimit)
+            for (id, flow) in s.flows where flow.lastReport < silent {
+                if flow.lastReport < forgotten { s.flows[id] = nil } else { s.flows[id]?.presumedClosed = true }
+                guard !flow.presumedClosed else { continue }
+                let revision = s.nextRevision()
+                if var connection = s.connections[flow.connectionKey] {
+                    connection.activeFlows = max(0, connection.activeFlows - 1)
+                    connection.revision = revision
+                    s.connections[flow.connectionKey] = connection
+                }
+                if var process = s.processes[flow.processPath] {
+                    process.activeFlows = max(0, process.activeFlows - 1)
+                    process.revision = revision
+                    s.processes[flow.processPath] = process
+                }
+            }
 
             let cutoff = now.addingTimeInterval(-ActivityTracker.retention)
             var removed = false

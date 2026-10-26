@@ -26,7 +26,12 @@ final class GeoLocator {
     }
 
     private(set) var status: Status = .missing
-    @ObservationIgnored private var table = IPRangeTable<UInt16>()
+    @ObservationIgnored private var table = IPRangeTable<UInt16>() {
+        didSet { lookups.removeAll() }
+    }
+    /// Countries already looked up: views ask for every connection on every refresh, and
+    /// parsing the address dominated the map's redraws.
+    @ObservationIgnored private var lookups: [String: Country?] = [:]
 
     nonisolated static let sources = [
         "https://ftp.arin.net/pub/stats/arin/delegated-arin-extended-latest",
@@ -67,8 +72,16 @@ final class GeoLocator {
     }
 
     func country(for address: String?) -> Country? {
-        guard let address, let ip = IPAddress(address), !ip.isLocalNetwork, let packed = table.lookup(ip) else { return nil }
-        return Country(code: String(UnicodeScalar(UInt8(packed >> 8))) + String(UnicodeScalar(UInt8(packed & 0xFF))))
+        guard let address else { return nil }
+        if let known = lookups[address] { return known }
+        let country: Country? = if let ip = IPAddress(address), !ip.isLocalNetwork, let packed = table.lookup(ip) {
+            Country(code: String(UnicodeScalar(UInt8(packed >> 8))) + String(UnicodeScalar(UInt8(packed & 0xFF))))
+        } else {
+            nil
+        }
+        if lookups.count > 50_000 { lookups.removeAll(keepingCapacity: true) }
+        lookups[address] = country
+        return country
     }
 
     func country(for connection: ConnectionRecord) -> Country? {

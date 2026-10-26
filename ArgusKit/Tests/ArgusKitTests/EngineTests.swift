@@ -193,6 +193,38 @@ func flow(_ process: ProcessIdentity = unknownApp, host: String? = "api.example.
         #expect(snapshot.isFull) // older client revisions must resync after a restore
         #expect(snapshot.connections.first?.activeFlows == 0)
     }
+
+    @Test func silentFlowsStopCountingAsOpen() throws {
+        let tracker = ActivityTracker()
+        let id = UUID()
+        let start = Date()
+        func open() -> Int { tracker.snapshot(since: 0, now: start).connections.first?.activeFlows ?? -1 }
+        tracker.recordConnection(flowID: id, context: flow(), verdict: Verdict(.allow, .appleSoftware), now: start)
+        tracker.tick(now: start.addingTimeInterval(60))
+        #expect(open() == 1)
+
+        // No report of its end, and nothing else for a long while: no longer open.
+        tracker.tick(now: start.addingTimeInterval(16 * 60))
+        #expect(open() == 0)
+
+        // It was alive after all: open again, and its bytes still count.
+        tracker.updateFlow(id, totalIn: 500, totalOut: 0, closed: false, now: start.addingTimeInterval(17 * 60))
+        #expect(open() == 1)
+        #expect(tracker.snapshot(since: 0, now: start).connections.first?.bytesIn == 500)
+
+        // Silent again, then its close arrives late: counted off once, not twice.
+        tracker.tick(now: start.addingTimeInterval(40 * 60))
+        tracker.updateFlow(id, totalIn: 500, totalOut: 0, closed: true, now: start.addingTimeInterval(41 * 60))
+        #expect(open() == 0)
+        #expect(tracker.snapshot(since: 0, now: start).processes.first?.activeFlows == 0)
+
+        // A flow that never reports again is forgotten after a day.
+        let lost = UUID()
+        tracker.recordConnection(flowID: lost, context: flow(), verdict: Verdict(.allow, .appleSoftware), now: start)
+        tracker.tick(now: start.addingTimeInterval(2 * 86_400))
+        tracker.updateFlow(lost, totalIn: 9_999, totalOut: 0, closed: false, now: start.addingTimeInterval(2 * 86_400))
+        #expect(open() == 0)
+    }
 }
 
 @Suite struct BlocklistExceptionTests {

@@ -182,10 +182,13 @@ struct MonitorView: View {
 
     private var visibleConnections: [ConnectionRecord] {
         let term = search.lowercased()
-        let base = model.selectedProcessPath.map { model.connections(of: $0) } ?? Array(model.connections.values)
-        return base.filter(passesFilter).filter { connection in
-            term.isEmpty || connection.remote.contains(term) || connection.addresses.contains { $0.contains(term) }
-                || model.selectedProcessPath != nil || model.identity(for: connection.processPath).name.lowercased().contains(term)
+        let selected = model.selectedProcessPath
+        // One pass over the records, copying only the ones shown (this runs every second).
+        return model.connections.values.filter { connection in
+            if let selected, connection.processPath != selected { return false }
+            return passesFilter(connection) && (term.isEmpty || connection.remote.contains(term)
+                || connection.addresses.contains { $0.contains(term) }
+                || selected != nil || model.identity(for: connection.processPath).name.lowercased().contains(term))
         }
     }
 
@@ -495,8 +498,40 @@ private struct ConnectionTable: View {
     let onCreateRule: (Rule) -> Void
     @State private var sortOrder = [KeyPathComparator(\ConnectionRecord.lastSeen, order: .reverse)]
 
+    /// The table re-sorts thousands of rows every second. Sorting positions with concrete
+    /// comparisons, then gathering the rows once, avoids KeyPathComparator's dynamic casts and
+    /// moving whole records around while sorting.
+    private var sortedConnections: [ConnectionRecord] {
+        guard let comparator = sortOrder.first else { return connections }
+        let forward = comparator.order == .forward
+        let rows = connections
+        func by<Value: Comparable>(_ value: (ConnectionRecord) -> Value) -> [Int] {
+            rows.indices.sorted { forward ? value(rows[$0]) < value(rows[$1]) : value(rows[$1]) < value(rows[$0]) }
+        }
+        let order: [Int]
+        switch comparator.keyPath {
+        case \ConnectionRecord.lastSeen:
+            // Open connections all read "Open now": keep them first in a fixed order instead of
+            // reshuffling every second, which made the table re-measure every row it moved.
+            let open = Date.distantFuture
+            order = rows.indices.sorted { a, b in
+                let first = rows[a].activeFlows > 0 ? open : rows[a].lastSeen
+                let second = rows[b].activeFlows > 0 ? open : rows[b].lastSeen
+                if first == second { return rows[a].id < rows[b].id }
+                return forward ? first < second : second < first
+            }
+        case \ConnectionRecord.port: order = by(\.port)
+        case \ConnectionRecord.totalBytes: order = by(\.totalBytes)
+        case \ConnectionRecord.remote:
+            let wanted: ComparisonResult = forward ? .orderedAscending : .orderedDescending
+            order = rows.indices.sorted { rows[$0].remote.localizedStandardCompare(rows[$1].remote) == wanted }
+        default: return rows.sorted(using: sortOrder)
+        }
+        return order.map { rows[$0] }
+    }
+
     var body: some View {
-        Table(connections.sorted(using: sortOrder), selection: $selection, sortOrder: $sortOrder) {
+        Table(sortedConnections, selection: $selection, sortOrder: $sortOrder) {
             TableColumn("") { connection in
                 VerdictBadge(verdict: connection.lastVerdict, compact: true)
             }
