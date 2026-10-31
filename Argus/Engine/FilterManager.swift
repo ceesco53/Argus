@@ -1,3 +1,4 @@
+import AppKit
 import ArgusKit
 import Foundation
 import NetworkExtension
@@ -17,6 +18,9 @@ final class FilterManager: NSObject {
         case installing
         /// macOS is waiting for the user to allow the extension in System Settings.
         case awaitingApproval
+        /// Set up, but the extension's switch in System Settings › General › Login Items &
+        /// Extensions is off (it can come back that way after a reinstall).
+        case turnedOffInSystemSettings
         /// Installed, but the filter configuration is switched off.
         case disabled
         case enabled
@@ -29,6 +33,7 @@ final class FilterManager: NSObject {
             case .notInstalled: "Not installed"
             case .installing: "Installing…"
             case .awaitingApproval: "Waiting for your approval"
+            case .turnedOffInSystemSettings: "Turned off in System Settings"
             case .disabled: "Installed but turned off"
             case .enabled: "Active"
             case .failed: "Problem"
@@ -89,6 +94,10 @@ final class FilterManager: NSObject {
                 if status != .installing, status != .awaitingApproval { status = .notInstalled }
             } else {
                 if manager.isEnabled, await !saveAgainIfSignatureChanged(manager) { return } // status says why
+                if manager.isEnabled, let problem = await extensionProblem() {
+                    status = problem
+                    return
+                }
                 status = manager.isEnabled ? .enabled : .disabled
             }
         } catch {
@@ -130,6 +139,18 @@ final class FilterManager: NSObject {
             }
         }
         return false
+    }
+
+    /// macOS keeps its own switch for the extension (System Settings › General › Login Items &
+    /// Extensions › Network Extensions), which the filter configuration doesn't reflect.
+    private func extensionProblem() async -> Status? {
+        let installed = await ExtensionProbe.properties().filter { !$0.isUninstalling }
+        guard !installed.isEmpty, !installed.contains(where: \.isEnabled) else { return nil }
+        return installed.contains(where: \.isAwaitingUserApproval) ? .awaitingApproval : .turnedOffInSystemSettings
+    }
+
+    static func openExtensionSettings() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")!)
     }
 
     private func recordSavedSignature() {
@@ -260,4 +281,45 @@ extension FilterManager: OSSystemExtensionRequestDelegate {
         let error = error as NSError
         Task { @MainActor in self.failed(error) }
     }
+}
+
+/// Asks macOS about the installed filter extension, chiefly whether its switch in System Settings
+/// is on. Gives up after a few seconds (an empty answer means "don't know").
+private final class ExtensionProbe: NSObject, OSSystemExtensionRequestDelegate, @unchecked Sendable {
+    struct Installed: Sendable {
+        let isEnabled: Bool
+        let isAwaitingUserApproval: Bool
+        let isUninstalling: Bool
+    }
+
+    @MainActor private static var running: Set<ExtensionProbe> = []
+    private var continuation: CheckedContinuation<[Installed], Never>?
+
+    @MainActor
+    static func properties() async -> [Installed] {
+        let probe = ExtensionProbe()
+        running.insert(probe) // requests hold their delegate weakly
+        defer { running.remove(probe) }
+        return await withCheckedContinuation { continuation in
+            probe.continuation = continuation
+            let request = OSSystemExtensionRequest.propertiesRequest(forExtensionWithIdentifier: ArgusPaths.filterBundleIdentifier, queue: .main)
+            request.delegate = probe
+            OSSystemExtensionManager.shared.submitRequest(request)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { probe.finish([]) }
+        }
+    }
+
+    private func finish(_ installed: [Installed]) {
+        continuation?.resume(returning: installed)
+        continuation = nil
+    }
+
+    func request(_ request: OSSystemExtensionRequest, foundProperties properties: [OSSystemExtensionProperties]) {
+        finish(properties.map { Installed(isEnabled: $0.isEnabled, isAwaitingUserApproval: $0.isAwaitingUserApproval, isUninstalling: $0.isUninstalling) })
+    }
+    func request(_ request: OSSystemExtensionRequest, didFinishWithResult result: OSSystemExtensionRequest.Result) { finish([]) }
+    func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) { finish([]) }
+    func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {}
+    func request(_ request: OSSystemExtensionRequest, actionForReplacingExtension existing: OSSystemExtensionProperties,
+                 withExtension replacement: OSSystemExtensionProperties) -> OSSystemExtensionRequest.ReplacementAction { .cancel }
 }

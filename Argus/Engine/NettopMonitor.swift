@@ -144,7 +144,8 @@ final class NettopMonitor: @unchecked Sendable {
         let context = FlowContext(
             process: identity, pid: pid, processStartTime: ProcessLookup.startTime(pid: pid),
             userID: ProcessLookup.userID(pid: pid) ?? getuid(), address: remoteAddress, remotePort: remotePort,
-            localAddress: local.address, localPort: localPort, proto: proto, direction: incoming ? .incoming : .outgoing)
+            localAddress: local.address, localPort: localPort, proto: proto, direction: incoming ? .incoming : .outgoing
+        ).attributingWebKitTraffic()
         var connection = Connection(id: UUID(), context: context, totalIn: totalIn, totalOut: totalOut)
         if completedSamples == 0 {
             connection.baselineIn = totalIn

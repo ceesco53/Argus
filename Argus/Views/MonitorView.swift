@@ -3,7 +3,7 @@ import SwiftUI
 
 struct MonitorView: View {
     @Environment(AppModel.self) private var model
-    @State private var search = ""
+    @State private var search = DebugLaunch.search
     @State private var filter: Filter = .all
     @State private var order: Order = .recent
     @State private var selectedConnection: ConnectionRecord.ID?
@@ -50,8 +50,18 @@ struct MonitorView: View {
                 if grouping == .apps { processList } else { domainList }
             }
             .frame(minWidth: 230, idealWidth: 270, maxWidth: 400)
-            Group {
-                if grouping == .apps { detail } else { domainDetail }
+            VStack(spacing: 0) {
+                if !search.isEmpty {
+                    SearchSummary(term: search.lowercased()) {
+                        filter = .blocked
+                        grouping = .apps
+                        model.selectedProcessPath = nil
+                    }
+                    Divider()
+                }
+                Group {
+                    if grouping == .apps { detail } else { domainDetail }
+                }
             }
             .frame(minWidth: 460, maxWidth: .infinity)
         }
@@ -183,13 +193,21 @@ struct MonitorView: View {
     private var visibleConnections: [ConnectionRecord] {
         let term = search.lowercased()
         let selected = model.selectedProcessPath
+        // With an app picked, a search for the app itself shows all of its connections; any other
+        // search narrows them to the matching servers.
+        let searchesSelectedApp = selected.map { model.identity(for: $0).name.lowercased().contains(term) } ?? false
         // One pass over the records, copying only the ones shown (this runs every second).
         return model.connections.values.filter { connection in
             if let selected, connection.processPath != selected { return false }
-            return passesFilter(connection) && (term.isEmpty || connection.remote.contains(term)
-                || connection.addresses.contains { $0.contains(term) }
-                || selected != nil || model.identity(for: connection.processPath).name.lowercased().contains(term))
+            guard passesFilter(connection) else { return false }
+            return term.isEmpty || searchesSelectedApp || MonitorView.matches(connection, term: term, model: model)
         }
+    }
+
+    /// Whether a connection's server, address or app matches a (lowercased) search.
+    static func matches(_ connection: ConnectionRecord, term: String, model: AppModel) -> Bool {
+        connection.remote.lowercased().contains(term) || connection.addresses.contains { $0.contains(term) }
+            || model.identity(for: connection.processPath).name.lowercased().contains(term)
     }
 
     @ViewBuilder
@@ -737,5 +755,59 @@ struct ConnectionInspector: View {
             ContentUnavailableView("No Selection", systemImage: "cursorarrow.click",
                                    description: Text("Double-click a connection to see everything Argus knows about it."))
         }
+    }
+}
+
+/// Answers "is anything I searched for being blocked?" across every app, above the results.
+private struct SearchSummary: View {
+    @Environment(AppModel.self) private var model
+    let term: String
+    let onShowBlocked: () -> Void
+
+    var body: some View {
+        let matches = model.connections.values.filter { MonitorView.matches($0, term: term, model: model) }
+        let servers = Set(matches.map(\.remote))
+        let blocked = Dictionary(grouping: matches.filter { $0.lastVerdict.action == .deny }, by: \.remote)
+        let blockedEarlier = Set(matches.filter { $0.denyCount > 0 }.map(\.remote)).subtracting(blocked.keys)
+        let apps = Set(matches.map(\.processPath)).count
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: matches.isEmpty ? "magnifyingglass" : blocked.isEmpty ? "checkmark.circle.fill" : "xmark.octagon.fill")
+                .font(.title3)
+                .foregroundStyle(matches.isEmpty ? Color.secondary : blocked.isEmpty ? Color.allowed : Color.denied)
+            VStack(alignment: .leading, spacing: 3) {
+                if matches.isEmpty {
+                    Text("Nothing matching “\(term)” has connected.").fontWeight(.semibold)
+                } else if blocked.isEmpty {
+                    Text("Nothing matching “\(term)” is blocked").fontWeight(.semibold)
+                    Text(counts(servers: servers.count, connections: matches.reduce(0) { $0 + $1.connectCount }, apps: apps)
+                         + (blockedEarlier.isEmpty ? "" : " \(blockedEarlier.count) \(blockedEarlier.count == 1 ? "was" : "were") blocked earlier, but not any more."))
+                        .font(.callout).foregroundStyle(.secondary)
+                } else {
+                    Text("\(blocked.count) of \(servers.count) servers matching “\(term)” \(blocked.count == 1 ? "is" : "are") blocked")
+                        .fontWeight(.semibold)
+                    ForEach(blocked.keys.sorted().prefix(3), id: \.self) { server in
+                        if let latest = blocked[server]?.max(by: { $0.lastSeen < $1.lastSeen }) {
+                            Text("\(server) — \(latest.lastVerdict.reason.explanation(in: model.state)) (\(model.identity(for: latest.processPath).name))")
+                                .font(.callout).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        }
+                    }
+                    if blocked.count > 3 {
+                        Text("and \(blocked.count - 3) more").font(.callout).foregroundStyle(.tertiary)
+                    }
+                }
+            }
+            Spacer()
+            if !blocked.isEmpty {
+                Button("Show Blocked", action: onShowBlocked)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background((blocked.isEmpty ? Color.allowed : Color.denied).opacity(matches.isEmpty ? 0 : 0.08))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func counts(servers: Int, connections: Int, apps: Int) -> String {
+        "\(servers) server\(servers == 1 ? "" : "s"), \(connections.formatted()) connection\(connections == 1 ? "" : "s") from \(apps) app\(apps == 1 ? "" : "s")."
     }
 }

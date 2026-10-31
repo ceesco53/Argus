@@ -39,6 +39,9 @@ public struct FlowContext: Sendable, Hashable {
     public var process: ProcessIdentity
     /// The helper that actually opened the socket, when different from `process`.
     public var via: ProcessIdentity?
+    /// `via` is a helper working for this one app (WebKit's networking process), so rules written
+    /// for the helper apply too. Not set for system services such as the DNS resolver.
+    public var viaIsHelper = false
     public var pid: Int32
     public var processStartTime: UInt64?
     public var userID: UInt32
@@ -72,6 +75,32 @@ public struct FlowContext: Sendable, Hashable {
         self.localPort = localPort
         self.proto = proto
         self.direction = direction
+    }
+
+    /// WebKit makes the connections of every app that shows web content, from a networking process
+    /// it runs for that app. Files such a connection under the app (Safari, Mail…) with WebKit as
+    /// the helper, so it shows under the app's name and the app's rules apply.
+    public func attributingWebKitTraffic(
+        responsiblePID: (Int32) -> Int32? = ProcessLookup.responsiblePID(for:),
+        identity: (Int32) -> ProcessIdentity = { CodeSignature.identity(auditToken: nil, pid: $0) }
+    ) -> FlowContext {
+        guard via == nil, process.isWebKitNetworking, let owner = responsiblePID(pid), owner != pid else { return self }
+        var context = self
+        context.via = process
+        context.viaIsHelper = true
+        context.process = identity(owner)
+        context.pid = owner
+        context.processStartTime = ProcessLookup.startTime(pid: owner)
+        context.auditToken = nil // the token was the helper's; the app is checked by its pid
+        return context
+    }
+
+    /// One of the tunnels iCloud Private Relay opens to Apple's relay servers, carrying Safari's
+    /// (and other apps') relayed connections.
+    public var isPrivateRelayTunnel: Bool {
+        if (process.path as NSString).lastPathComponent == "networkserviceproxy" { return true }
+        guard let hostname else { return false }
+        return ["mask.icloud.com", "mask-h2.icloud.com", "mask-api.icloud.com"].contains { hostname == $0 || hostname.hasSuffix("." + $0) }
     }
 
     /// The port rules match: the server port for outgoing traffic, our listening port for incoming.

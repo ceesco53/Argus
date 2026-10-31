@@ -277,12 +277,13 @@ private struct FilterSettings: View {
                         .fixedSize(horizontal: false, vertical: true)
                 case .notInstalled, .failed:
                     Button("Install Network Filter…") { filter.install() }
-                case .awaitingApproval:
-                    Text("Open System Settings › General › Login Items & Extensions › Network Extensions and allow Argus.")
+                case .awaitingApproval, .turnedOffInSystemSettings:
+                    Text(filter.status == .awaitingApproval
+                         ? "Open System Settings › General › Login Items & Extensions › Network Extensions and allow Argus."
+                         : "The filter is set up, but its switch in System Settings › General › Login Items & Extensions › Network Extensions is off, so Argus can only watch. Turn on Argus there.")
                         .font(.callout)
-                    Button("Open System Settings") {
-                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")!)
-                    }
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Open System Settings") { FilterManager.openExtensionSettings() }
                 case .disabled:
                     Button("Turn On Network Filter") { Task { await filter.enable() } }
                 case .enabled:

@@ -57,6 +57,12 @@ public struct CompiledRuleSet: Sendable {
         for entry in byPath[flow.process.path] ?? [] where CompiledRuleSet.matches(entry, flow) {
             consider(RuleMatch(action: entry.rule.action, rule: entry.rule, specificity: entry.specificity))
         }
+        // Rules made for a helper before its traffic was filed under the app it works for.
+        if flow.viaIsHelper, let helper = flow.via?.path {
+            for entry in byPath[helper] ?? [] where CompiledRuleSet.matches(entry, flow) {
+                consider(RuleMatch(action: entry.rule.action, rule: entry.rule, specificity: entry.specificity))
+            }
+        }
         for entry in anyProcess where CompiledRuleSet.matches(entry, flow) {
             consider(RuleMatch(action: entry.rule.action, rule: entry.rule, specificity: entry.specificity))
         }

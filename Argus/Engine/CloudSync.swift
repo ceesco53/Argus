@@ -27,7 +27,8 @@ final class CloudSync {
     private static let enabledKey = "iCloudSync"
     private static let syncedIDsKey = "iCloudSyncedIDs"
 
-    var isEnabled: Bool { UserDefaults.standard.bool(forKey: CloudSync.enabledKey) }
+    /// Never in demo mode: its made-up rules must not reach the real ones on other Macs.
+    var isEnabled: Bool { !DebugLaunch.demo && UserDefaults.standard.bool(forKey: CloudSync.enabledKey) }
 
     var availability: Availability {
         guard let task = SecTaskCreateFromSelf(nil),

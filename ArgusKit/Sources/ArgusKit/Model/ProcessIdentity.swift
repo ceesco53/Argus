@@ -86,3 +86,10 @@ public struct ProcessIdentity: Codable, Hashable, Sendable {
 
     public static let kernel = ProcessIdentity(path: "/kernel", name: "macOS Kernel", signature: .apple)
 }
+
+extension ProcessIdentity {
+    /// The networking process WebKit runs for each app that shows web content (Safari, Mail, …).
+    public var isWebKitNetworking: Bool {
+        bundleIdentifier == "com.apple.WebKit.Networking" || (path as NSString).lastPathComponent == "com.apple.WebKit.Networking"
+    }
+}

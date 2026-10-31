@@ -41,6 +41,7 @@
 		A35D2B8E4E3DE74BD3992932 /* RulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E25EBB920920346E7DBCB0FE /* RulesView.swift */; };
 		A35F4CB401D70046CB318C7C /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFF2B010736276EA7F871EC5 /* OnboardingView.swift */; };
 		A3C0CDAFBB4F34FEEF031ECA /* GeoLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35401880333E9393CDB2F3AE /* GeoLocator.swift */; };
+		A42733095A8ECB816936ABDA /* DemoEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A01B7AF8C60C4A037A35C36B /* DemoEngine.swift */; };
 		A5F35474F5E8CCD076612C9C /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0179AA25C1A995D10783111D /* Components.swift */; };
 		A6D269D69EE6E1735952A6AA /* ArgusKit in Frameworks */ = {isa = PBXBuildFile; productRef = F95EB9125364A8B1D0C4451A /* ArgusKit */; };
 		AA86B2BF1B7DDF779F92D74F /* ArgusWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 86297AD60BFC6A661E3DDDE0 /* ArgusWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -147,6 +148,7 @@
 		93930D63C96333CBC93CABC7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		991E2728655874704483C423 /* AlertView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertView.swift; sourceTree = "<group>"; };
 		993038FF837D5E46395CF754 /* Argus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Argus.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A01B7AF8C60C4A037A35C36B /* DemoEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoEngine.swift; sourceTree = "<group>"; };
 		B1FC1BF81D3C7A30B4D23029 /* ProfilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilesView.swift; sourceTree = "<group>"; };
 		B4B8F05C3EB2132491F5E533 /* NetworkExtension.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = NetworkExtension.framework; path = System/Library/Frameworks/NetworkExtension.framework; sourceTree = SDKROOT; };
 		BE4FB657F013143A3F0D60E0 /* ArgusWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArgusWidgets.swift; sourceTree = "<group>"; };
@@ -344,6 +346,7 @@
 			children = (
 				0947767483435D5A805EA37D /* BusyDetector.swift */,
 				162B9CACA1C0F3577526FF6B /* CloudSync.swift */,
+				A01B7AF8C60C4A037A35C36B /* DemoEngine.swift */,
 				F2E66FA5E8E33C34E87B7FDB /* FilterManager.swift */,
 				35401880333E9393CDB2F3AE /* GeoLocator.swift */,
 				57D51665FE0536CA01946C9B /* HealthMonitor.swift */,
@@ -560,6 +563,7 @@
 				F8B5EFAB6F504CCEEDECC2DA /* CaptureView.swift in Sources */,
 				374116BE8F1CCF638DC362EA /* CloudSync.swift in Sources */,
 				A5F35474F5E8CCD076612C9C /* Components.swift in Sources */,
+				A42733095A8ECB816936ABDA /* DemoEngine.swift in Sources */,
 				91BDBBF5A24D82EB1AAF9377 /* DigestView.swift in Sources */,
 				893CDF223CF05258D7FD350C /* FilterManager.swift in Sources */,
 				A3C0CDAFBB4F34FEEF031ECA /* GeoLocator.swift in Sources */,
@@ -741,7 +745,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 14;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -764,7 +768,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.0.3;
+				MARKETING_VERSION = 1.0.4;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -811,7 +815,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 14;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -828,7 +832,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.0.3;
+				MARKETING_VERSION = 1.0.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

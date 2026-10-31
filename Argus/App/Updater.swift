@@ -13,7 +13,7 @@ final class Updater {
         let info = Bundle.main.infoDictionary ?? [:]
         let feed = info["SUFeedURL"] as? String ?? ""
         let key = info["SUPublicEDKey"] as? String ?? ""
-        controller = feed.isEmpty || key.isEmpty ? nil
+        controller = feed.isEmpty || key.isEmpty || DebugLaunch.demo ? nil
             : SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     }
 

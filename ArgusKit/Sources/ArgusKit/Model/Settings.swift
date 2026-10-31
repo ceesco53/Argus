@@ -43,6 +43,10 @@ public struct FirewallSettings: Codable, Hashable, Sendable {
     /// When an alert goes unanswered, follow a confident suggestion instead of `alertTimeoutAction`.
     public var alertTimeoutFollowsAdvice = false
 
+    /// Switches for diagnosing how the filter hands connections back to macOS (`argus diagnostics`):
+    /// `bareAllow`, `noReports`, `noUDPReports` and `noDNSPeek`.
+    public var diagnosticFlags: Set<String> = []
+
     /// Require administrator authentication to change rules and settings.
     public var lockEnabled = false
     /// While locked, still let alerts create rules.
@@ -77,6 +81,7 @@ public struct FirewallSettings: Codable, Hashable, Sendable {
         dataUsageWarningMB = try c.decodeIfPresent(Int.self, forKey: .dataUsageWarningMB) ?? d.dataUsageWarningMB
         suggestAnswers = try c.decodeIfPresent(Bool.self, forKey: .suggestAnswers) ?? d.suggestAnswers
         alertTimeoutFollowsAdvice = try c.decodeIfPresent(Bool.self, forKey: .alertTimeoutFollowsAdvice) ?? d.alertTimeoutFollowsAdvice
+        diagnosticFlags = try c.decodeIfPresent(Set<String>.self, forKey: .diagnosticFlags) ?? d.diagnosticFlags
         lockEnabled = try c.decodeIfPresent(Bool.self, forKey: .lockEnabled) ?? d.lockEnabled
         alertsAllowedWhenLocked = try c.decodeIfPresent(Bool.self, forKey: .alertsAllowedWhenLocked) ?? d.alertsAllowedWhenLocked
     }

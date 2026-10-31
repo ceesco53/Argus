@@ -32,6 +32,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func post(id: String, title: String, body: String, category: String? = nil, userInfo: [String: String] = [:]) {
+        guard !DebugLaunch.demo else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body

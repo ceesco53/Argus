@@ -105,6 +105,9 @@ final class AppModel {
 
     @ObservationIgnored private var client: ArgusClient?
     @ObservationIgnored private var monitor: MonitorEngine?
+    #if DEBUG
+    @ObservationIgnored private var demo: DemoEngine?
+    #endif
     @ObservationIgnored private var revision: UInt64 = 0
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
     @ObservationIgnored private var stateRefresh: Task<Void, Never>?
@@ -128,17 +131,23 @@ final class AppModel {
             Task { await self?.busyChanged(isBusy) }
         }
         busy.start()
-        await filter.refresh()
-        filter.updateIfNeeded()
+        if !DebugLaunch.demo {
+            await filter.refresh()
+            filter.updateIfNeeded()
+        }
         await geo.load()
         if DebugLaunch.downloadLocation, !geo.isReady { Task { await geo.update() } }
         network.onChange = { [weak self] identity in
             Task { await self?.networkChanged(identity) }
         }
-        network.start()
+        if !DebugLaunch.demo { network.start() } // the demo shouldn't show this Mac's real network
         await connect()
-        cloud.start(model: self)
+        if !DebugLaunch.demo { cloud.start(model: self) }
         filter.onStatusChange = { [weak self] status in
+            if status == .turnedOffInSystemSettings {
+                self?.notifier.post(id: "argus-extension-off", title: "Argus can't block anything right now",
+                                    body: "Its network filter is switched off in System Settings › General › Login Items & Extensions › Network Extensions. Turn on Argus there.")
+            }
             Task { await self?.filterStatusChanged(status) }
         }
         housekeeping = Task { [weak self] in
@@ -146,7 +155,7 @@ final class AppModel {
             while !Task.isCancelled {
                 await self?.reconnectFilterIfStranded()
                 if minute % 10 == 0 { await self?.checkHealth() }
-                if minute % 60 == 1 { await self?.checkWeeklyDigest() }
+                if minute % 60 == 1, !DebugLaunch.demo { await self?.checkWeeklyDigest() }
                 minute += 1
                 try? await Task.sleep(for: .seconds(60))
             }
@@ -163,6 +172,17 @@ final class AppModel {
     func connect() async {
         filterRetry?.cancel()
         filterRetry = nil
+        #if DEBUG
+        if DebugLaunch.demo {
+            if demo == nil {
+                let engine = DemoEngine()
+                engine.start()
+                demo = engine
+            }
+            await attach(demo!.makeClient(), engine: .filter)
+            return
+        }
+        #endif
         if filter.status == .enabled, let name = filter.machServiceName {
             if let client = await connectToFilter(name) {
                 await useFilter(client)
@@ -380,6 +400,7 @@ final class AppModel {
 
     /// Shares status with the widgets and Control Center controls through the app group.
     private func publishWidgetSnapshot() {
+        guard !DebugLaunch.demo else { return } // the widgets show the real Argus
         let settings = state.settings
         let status: WidgetSnapshot.Status = if !settings.protectionEnabled {
             .off

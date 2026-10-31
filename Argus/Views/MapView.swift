@@ -8,8 +8,9 @@ struct ConnectionsMapView: View {
     @Environment(AppModel.self) private var model
     @State private var selected: String?
     @State private var position: MapCameraPosition = .region(MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 25, longitude: GeoLocator.home?.longitude ?? 0),
-        span: MKCoordinateSpan(latitudeDelta: 130, longitudeDelta: 300)))
+        // The demo shows the Atlantic, so its connections to Europe are in view.
+        center: CLLocationCoordinate2D(latitude: DebugLaunch.demo ? 38 : 25, longitude: DebugLaunch.demo ? -45 : GeoLocator.home?.longitude ?? 0),
+        span: MKCoordinateSpan(latitudeDelta: DebugLaunch.demo ? 95 : 130, longitudeDelta: 300)))
 
     struct CountryStats: Identifiable {
         let country: Country

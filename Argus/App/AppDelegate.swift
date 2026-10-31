@@ -62,6 +62,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "ArgusDebugAlert") { model.showSampleAlert() }
             if UserDefaults.standard.bool(forKey: "ArgusDebugMenu") { showMenuPreview() }
+            if let name = UserDefaults.standard.string(forKey: "ArgusDebugTroubleshoot") {
+                try? await Task.sleep(for: .milliseconds(800))
+                model.troubleshootAppPath = model.processes.values.first { $0.identity.name == name }?.id
+            }
+            if let size = DebugLaunch.windowSize {
+                try? await Task.sleep(for: .milliseconds(600))
+                if let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix("main") == true }) {
+                    window.setFrame(NSRect(origin: window.frame.origin, size: size), display: true)
+                    window.center()
+                }
+            }
             switch UserDefaults.standard.string(forKey: "ArgusDebugSheet") {
             case "review": model.showReview = true
             case "digest": model.showDigest = true

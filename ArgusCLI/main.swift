@@ -193,14 +193,25 @@ func resolve<T>(_ text: String, in items: [T], id: (T) -> UUID, name: (T) -> Str
     return byID[0]
 }
 
-/// Accepts a full path, or the name of a program Argus has already seen.
-func resolveProcess(_ text: String, client: ArgusClient) async throws -> String {
-    if text.hasPrefix("/") { return text }
+/// Every program with this name (or the full path given), most recently active first.
+func resolveProcesses(_ text: String, client: ArgusClient) async throws -> [String] {
+    if text.hasPrefix("/") { return [text] }
     let processes = try await client.activity(since: 0).processes
-    let matches = processes.filter { $0.identity.name.lowercased() == text.lowercased() || ($0.identity.path as NSString).lastPathComponent == text }
-    guard let match = matches.first else { throw CLIError("No program called “\(text)” has used the network yet. Pass its full path instead.") }
-    if matches.count > 1 { throw CLIError("Several programs are called “\(text)”: \(matches.map(\.identity.path).joined(separator: ", "))") }
-    return match.identity.path
+    let matches = processes
+        .filter { $0.identity.name.lowercased() == text.lowercased() || ($0.identity.path as NSString).lastPathComponent == text }
+        .sorted { $0.lastSeen > $1.lastSeen }
+    guard !matches.isEmpty else { throw CLIError("No program called “\(text)” has used the network yet. Pass its full path instead.") }
+    return matches.map(\.identity.path)
+}
+
+/// Accepts a full path, or the name of a program Argus has already seen. macOS keeps several
+/// copies of some system programs; then the one that used the network most recently is meant.
+func resolveProcess(_ text: String, client: ArgusClient) async throws -> String {
+    let paths = try await resolveProcesses(text, client: client)
+    if paths.count > 1 {
+        FileHandle.standardError.write(Data("argus: \(paths.count) programs are called “\(text)”; using the one active most recently: \(paths[0])\n".utf8))
+    }
+    return paths[0]
 }
 
 func parseDuration(_ text: String) throws -> TimeInterval {
@@ -262,6 +273,16 @@ func run(_ args: Arguments) async throws {
         }
         _ = try await newState(client, .setMode(mode))
         print("Mode: \(mode.displayName)")
+
+    case "diagnostics":
+        // Undocumented: switches for narrowing down how the filter affects connections.
+        var settings = try await client.state().settings
+        if let first = rest.first {
+            settings.diagnosticFlags = first == "none" ? [] : Set(rest)
+            _ = try await newState(client, .updateSettings(settings))
+        }
+        print("Diagnostic flags: \(settings.diagnosticFlags.isEmpty ? "none" : settings.diagnosticFlags.sorted().joined(separator: ", "))")
+        print("Available: bareAllow, noReports, noUDPReports, noDNSPeek (argus diagnostics none to clear)")
 
     case "protection":
         guard let value = rest.first, value == "on" || value == "off" else { throw CLIError("Use: argus protection on|off") }
@@ -441,8 +462,8 @@ func rules(_ rest: [String], _ args: Arguments, _ client: ArgusClient) async thr
     case "list":
         var rules = allRules
         if let process = args.option("process") {
-            let path = try await resolveProcess(process, client: client)
-            rules = rules.filter { $0.process == .path(path) || $0.process == .any }
+            let paths = Set(try await resolveProcesses(process, client: client))
+            rules = rules.filter { rule in rule.process.path.map(paths.contains) ?? true }
         }
         if args.has("json") { return try printJSON(rules) }
         table(rules.map { rule in

@@ -1,242 +1,147 @@
-# Argus
+<p align="center">
+  <img src="Argus/Resources/Assets.xcassets/AppIcon.appiconset/icon_256x256.png" width="160" alt="The Argus icon: a cute, many-eyed peacock creature">
+</p>
 
-A hundred-eyed guardian for your Mac's network. Argus shows every connection every app makes, asks before
-unknown connections go through, and blocks what you don't want, with a menu bar status item, a monitor,
-a world map, rules, profiles, community blocklists, packet capture and a command line tool.
+<h1 align="center">Argus</h1>
 
-![icon](Argus/Resources/Assets.xcassets/AppIcon.appiconset/icon_256x256.png)
+<p align="center">
+  <b>A hundred-eyed guardian for your Mac's network.</b><br>
+  See every connection every app makes. Decide what gets through. Block what you don't want.
+</p>
 
-## Disclaimer and Terms of Use
+<p align="center">
+  <a href="https://github.com/ceesco53/Argus/releases/latest"><b>Download</b></a> ·
+  <a href="docs/FEATURES.md">All features</a> ·
+  <a href="docs/BUILDING.md">Build from source</a> ·
+  <a href="docs/COMMAND-LINE.md">Command line</a>
+</p>
 
-> **Argus was vibe coded by Claude, an AI model, and comes with no warranty whatsoever. Its author takes no responsibility, legal or otherwise, for anything it does to your Mac, your network, your data or anything else.** Argus asks you to accept the terms below the first time it opens and will not run unless you do.
+> [!WARNING]
+> **Argus was vibe coded by Claude, an AI model, and comes with no warranty whatsoever. Its author takes
+> no responsibility, legal or otherwise, for anything it does to your Mac, your network, your data or
+> anything else.** Argus asks you to accept its [Disclaimer and Terms of Use](docs/TERMS.md) the first
+> time it opens and will not run unless you do.
 
-**Argus Disclaimer and Terms of Use** · Version 1 · Effective October 26, 2026
+![Argus showing today's connections, what it blocked, this week's summary and live traffic](docs/images/overview.png)
 
-**PLEASE READ THESE TERMS CAREFULLY. THEY FORM A BINDING AGREEMENT BETWEEN YOU AND THE AUTHOR OF ARGUS. BY INSTALLING, OPENING OR USING ARGUS, OR BY SELECTING “AGREE”, YOU ACCEPT THESE TERMS. IF YOU DO NOT AGREE, DO NOT INSTALL OR USE ARGUS.**
+## Every connection, at a glance
 
-**1. AI-Generated Software.** Argus was “vibe coded”: it was written largely by Claude, an artificial-intelligence model made by Anthropic, at the direction of its author and with limited human review. It may contain errors, security vulnerabilities and behavior that no one intended or anticipated. Argus is an independent project; it is not made, reviewed, endorsed or supported by Anthropic.
+Every app, every server, where it is and how much data moved, live. Group by app or by domain, filter to
+what was blocked or what's new this week, and see Safari's web traffic under Safari, not a system helper.
 
-**2. No Warranty.** ARGUS IS PROVIDED “AS IS” AND “AS AVAILABLE”, WITH ALL FAULTS AND WITHOUT WARRANTY OF ANY KIND, WHETHER EXPRESS, IMPLIED OR STATUTORY, INCLUDING ANY WARRANTY OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY, SECURITY OR UNINTERRUPTED OR ERROR-FREE OPERATION. The author does not warrant that Argus will protect your Mac, or that it will block or allow any particular connection.
+![The Network Monitor listing apps and their connections](docs/images/monitor.png)
 
-**3. Assumption of Risk.** Argus installs a system network filter that inspects, holds, allows and blocks network traffic for every program on your Mac. You understand that using it may, among other things, interrupt or disable internet and network access; break apps, services and updates; cause loss or corruption of data; expose information or fail to protect it; interfere with security software or emergency communications; and require you to reinstall software or macOS. You use Argus entirely at your own risk and are solely responsible for the results, including backing up your data and every connection Argus allows or blocks.
+## Decide in one click
 
-**4. Limitation of Liability.** TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE AUTHOR OR ANY CONTRIBUTOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY OF ANY KIND, WHETHER DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY OR PUNITIVE, INCLUDING LOSS OF DATA, PROFITS, REVENUE, BUSINESS, GOODWILL OR USE, OR COMPUTER FAILURE OR MALFUNCTION, ARISING FROM OR RELATED TO ARGUS OR ITS USE, WHETHER IN CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. WHERE LIABILITY CANNOT BE EXCLUDED, IT IS LIMITED TO THE AMOUNT YOU PAID FOR ARGUS, IF ANY.
+When an app tries something new, Argus holds the connection and asks, with a suggested answer and the
+reasons behind it. Answer for one server or the whole domain, once or forever. Other apps' alerts wait
+politely below, grouped so you can answer them together.
 
-**5. Not Professional or Security Advice.** Argus’s suggestions, ratings, blocklists, reports and other output are for information only and may be wrong. Do not rely on Argus as your only protection, or for any safety-critical, medical, legal, financial, compliance or emergency purpose.
+<p align="center">
+  <img src="docs/images/alert.png" width="470" alt="A connection alert for Safari, with a suggestion and the alerts still waiting">
+</p>
 
-**6. Indemnification.** You agree to indemnify, defend and hold harmless the author and all contributors from and against any claim, loss, liability, damage or expense (including reasonable legal fees) arising from your use or misuse of Argus or your breach of these terms.
+## See where your data goes
 
-**7. Lawful Use.** You are solely responsible for complying with every law that applies to you, including laws on monitoring network traffic and capturing packets. Use Argus only on devices and networks you own or are authorized to monitor.
+![The World Map with lines from this Mac to the countries its connections reach](docs/images/world-map.png)
 
-**8. General.** These terms supplement the MIT License under which Argus’s source code is distributed and do not limit the rights that license grants. If any provision is held unenforceable, it shall be enforced to the maximum extent permissible and the remaining provisions shall remain in full force and effect. If these terms change, Argus will ask you to accept them again before it runs. By agreeing, you confirm that you have read and understood these terms and are legally able to accept them.
+## Rules that read like sentences
 
-## Highlights
+Allow or deny by app, server, domain, network, port and protocol. Make rules temporary, give them
+priority, or keep them to one profile. Duplicates and rules that can never apply are flagged, and every
+change can be undone.
 
-- **A calm start.** A learning period quietly records what your apps do for a few days, then a single
-  review screen lets you trust or block each app, instead of a flood of alerts on day one.
-- **Alerts that help you decide.** Each alert suggests an answer and says why; waiting alerts are grouped
-  by app so you can answer an app's alerts at once.
-- **Never interrupts a call.** During video calls, or while the screen is locked, Argus decides on its own
-  (following a confident suggestion) and keeps the decisions for review.
-- **Something not working?** The troubleshooter shows what Argus blocked for the app you're using and
-  checks what it would do with any website; notifications tell you when the app in front was blocked.
-- **Undo.** Every change to rules, profiles, blocklists and settings can be undone, from a message
-  right after the change or from Recent Changes (⌥⌘Z undoes the latest).
-- **Health checks.** Argus notices when DNS or the internet stops working, says whether it's the cause,
-  and pauses itself while you sign in to hotel or airport Wi-Fi.
-- **Pause** for 1, 5, 30 or 60 minutes from the menu bar, Control Center, Shortcuts or `argus pause`.
-- **Weekly report** and **data usage warnings**, desktop **widgets**, Siri and Shortcuts actions, and
-  **iCloud sync** of rules between your Macs.
+![The Rules list](docs/images/rules.png)
 
-## Two ways Argus runs
+## Blocklists, one click away
 
-| | Monitor mode | Filter mode |
-|---|---|---|
-| Needs | Nothing (any build) | A paid Apple Developer team + the Network Extension entitlement |
-| Sees every connection, traffic, locations | ✓ (via `nettop`) | ✓ (from the filter) |
-| Hostnames | Reverse DNS (marked `≈`) | What the app actually asked for, plus names learned from DNS answers |
-| Alerts that hold a connection | — | ✓ |
-| Enforces rules and blocklists | Shows what *would* be blocked | ✓ |
-| PCAP capture | — | ✓ |
+Subscribe to the community's ad, tracker and malware lists from a built-in catalog, or any list by URL.
+They refresh themselves, and never touch your own network.
 
-Rules, profiles and blocklists made in monitor mode carry over automatically the first time the filter runs.
+![Subscribed and recommended community blocklists](docs/images/blocklists.png)
 
-## Building
+## Profiles that follow you
 
-Requirements: Xcode 27 (macOS 15 SDK or newer), [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+Home, Office, Coffee Shop: each with its own rules and mode, switched automatically when your Mac joins
+one of its networks.
 
-```sh
-brew install xcodegen
-xcodegen generate            # creates Argus.xcodeproj from project.yml
-open Argus.xcodeproj         # or:
-xcodebuild -scheme Argus -configuration Release -derivedDataPath build/DerivedData build
-```
+![The Profiles screen](docs/images/profiles.png)
 
-The default build signs locally without restricted entitlements and runs in **monitor mode**.
+## Something not working?
 
-### Enabling the network filter
+Pick the app that's misbehaving: Argus shows what it blocked and why, and lets it through in one click.
+Search anything, and Argus tells you straight away whether it's being blocked.
 
-Apple only grants the Network Extension and System Extension entitlements to paid Apple Developer Program
-teams, so the firewall needs your team:
+![Troubleshoot, showing what Argus blocked for Safari](docs/images/troubleshoot.png)
 
-1. Create `Config/Local.xcconfig` (git-ignored). Bundle identifiers are unique across all developers, so
-   pick a prefix of your own:
-   ```
-   DEVELOPMENT_TEAM = ABCDE12345
-   ARGUS_FILTER_ENABLED = YES
-   ARGUS_BUNDLE_PREFIX = com.example
-   ```
-2. Build with automatic signing allowed to register the identifiers and capabilities (Network Extensions,
-   System Extension, app group `<TEAM>.<prefix>.Argus`):
-   ```sh
-   xcodegen generate
-   xcodebuild -scheme Argus -configuration Release -destination 'platform=macOS' \
-     -derivedDataPath build/DerivedData -allowProvisioningUpdates build
-   ```
-   For iCloud sync of rules, also set `ARGUS_ICLOUD_ENABLED = YES` once Xcode is signed in to your
-   developer account, so automatic signing can add the iCloud capability.
-3. Move `Argus.app` to `/Applications` (macOS only loads system extensions from there), open it,
-   click **Install Filter** and allow it in System Settings › General › Login Items & Extensions.
+![A search for doubleclick, summarised as blocked by a rule](docs/images/search.png)
 
-For distribution outside the App Store, archive with a Developer ID certificate and notarize.
+## Security that watches the watchers
 
-## Architecture
+Every program's code signature is checked when it connects, so a replaced or tampered app can't inherit
+its rules. Argus also warns when something starts sniffing raw network traffic, and can lock its settings
+behind an administrator password.
 
-```
-┌──────────────── Argus.app (menu bar agent, SwiftUI) ───────────────┐
-│ AppModel ── ArgusClient ──┬── XPC ──────────► ArgusFilter (system   │
-│   views, alerts, map      │                    extension, root,      │
-│   FilterManager           │                    NEFilterDataProvider) │
-│   NetworkWatcher          │                      └ FirewallCore      │
-│   GeoLocator              └── in-process ──► MonitorEngine           │
-│                                                └ FirewallCore        │
-│                                                └ NettopMonitor       │
-│                                                └ Unix socket ◄── argus CLI (monitor mode)
-└─────────────────────────────────────────────────────────────────────┘
-                       argus CLI ── XPC ──► ArgusFilter (filter mode)
-```
+![The Security screen: code signatures, packet sniffing, settings lock and event log](docs/images/security.png)
 
-- **ArgusKit** (Swift package) holds everything that isn't UI: the rule engine and its precedence rules,
-  profiles, blocklist/rule-group parsers (hosts, domain lists, IP sets, Little Snitch `.lsrules`), the DNS
-  answer parser, the PCAP writer, activity and traffic statistics, code-signature and libproc helpers,
-  admin authorization, and the message protocol shared by every transport.
-- **FirewallCore** is the single source of truth. The same engine runs inside the filter or inside the app,
-  so both modes behave identically apart from enforcement.
-- **ArgusFilter** pauses unknown flows (`.pause()`), asks the app over XPC, and resumes them with the answer.
-  It peeks at DNS responses to learn hostnames, and at payloads only while a capture is running.
-- **IPC** is one Codable request/response/event protocol over three transports: NSXPC (app/CLI ↔ filter),
-  a Unix socket (CLI ↔ in-app monitor) and an in-memory pipe (app ↔ in-app monitor).
+## A calm start, and a weekly look back
 
-### Suggested answers
+Start with a quiet learning period instead of a flood of alerts, then trust or block each app from one
+review screen. Every week, a short report shows what was blocked and what's new.
 
-Each alert carries a suggestion built from independent signals, shown with its reasons:
+<p align="center">
+  <img src="docs/images/review.png" width="49%" alt="Reviewing apps that used the network without a rule">
+  <img src="docs/images/weekly-report.png" width="49%" alt="The weekly report">
+</p>
 
-| Signal | Leans | Strength |
-|---|---|---|
-| Listed by HaGeZi Threat Intelligence (reference only) | Deny | Strong (overrides everything) |
-| Listed by HaGeZi Multi Pro (reference only) | Deny, whole domain | Moderate |
-| A known analytics/ads service, or `telemetry`-style names | Deny | Weak |
-| The app's own server (the domain's brand is in the app's identifier, e.g. `com.google.Chrome` → `google.com`) | Allow | Moderate |
-| Apple services / shared CDNs | Allow | Moderate / weak |
-| Your rules for the same domain, and your earlier answers | Either | Moderate / weak |
-| Unsigned or broken signature, incoming from the internet | Deny | Weak / moderate |
+## Always in your menu bar
 
-Reference lists are downloaded daily by the engine and never block anything themselves: a host on a
-list you've *enabled* is blocked before anyone is asked, so only lists you haven't enabled can advise.
-The suggested button becomes the default, and unanswered alerts can optionally follow a confident
-suggestion (Settings › Alerts).
+<img src="docs/images/menu-bar.png" width="340" align="right" alt="The Argus menu bar window">
 
-### Rule precedence
+Live traffic, what was just blocked (allow it in one click), what's active right now, and the mode, all
+from the menu bar. Pause protection for a few minutes from here, Control Center or Shortcuts.
 
-When several rules match, Argus compares them in this order and the first difference wins:
-priority rules › rules for a specific program › the narrower server (host or IP › deeper domain › network
-› local network › any) › a specific port › a specific protocol › deny over allow. Blocklist entries behave
-like "deny any program" rules, so allowing a specific app always overrides a list, and an allow rule
-exactly as narrow as a list entry wins over it. IP lists never apply to local-network addresses (some,
-like FireHOL, list the private ranges, which would otherwise cut a Mac off from its own router and DNS).
+And there's more:
 
-## Command line
+- **Learns while you work**, and decides on its own during calls and while the screen is locked
+- **Health checks** that say whether Argus is the cause, and step aside for hotel Wi-Fi sign-ins
+- **Packet capture** to `.pcap` for Wireshark
+- **Widgets**, **Control Center** controls and **Siri & Shortcuts** actions
+- **iCloud sync** of rules between your Macs
+- A **command line tool** for everything, usable over SSH
+- **Automatic updates**, signed and notarized
 
-The tool is embedded at `Argus.app/Contents/Helpers/argus`. Install a link from Settings › Command Line.
+<br clear="right">
 
-```sh
-argus status
-argus rules add deny --process Safari --domain doubleclick.net
-argus rules add allow --process /usr/bin/curl --host api.example.com --port 443 --proto tcp --for 2h
-argus profiles activate Work
-argus blocklists add hagezi-light          # or any URL; see `argus blocklists catalog`
-argus log --follow
-argus blocked                               # what was blocked recently, and why
-argus allow news.google.com                 # always allow a host (add --domain or --process NAME)
-argus pause 5m && argus resume              # allow everything for a while
-argus learn 3d                              # quiet learning period, then review in the app
-argus test news.google.com --process Safari # what would happen, and why
-argus changes && argus undo                 # recent changes; undo the latest
-argus report --days 7                       # blocked, most-blocked domains, new apps
-sudo argus capture start --process curl --seconds 30 && argus capture save <id> out.pcap
-argus backup argus.json && argus restore argus.json --merge
-argus lock                                  # changes now need an administrator (or root)
-```
+See [everything Argus does](docs/FEATURES.md).
 
-Run `argus help` for everything. Over SSH, `sudo argus …` administers a locked Mac.
+## Get Argus
 
-## Development
+**[Download the latest release](https://github.com/ceesco53/Argus/releases/latest)**, unzip it and move
+Argus to your Applications folder. Requires macOS 15 or later.
 
-```sh
-cd ArgusKit && swift test                                   # engine, parsers, PCAP (checked with tcpdump), IPC
-swift Tools/ArtworkGenerator.swift Argus/Resources/Assets.xcassets   # re-render icon, mascot, menu glyph
-```
+The first time it opens, Argus asks you to accept its terms, then to install its network filter, which
+macOS asks you to allow in System Settings › General › Login Items & Extensions.
 
-Debug builds accept launch arguments for working on the UI without the filter:
+Prefer to build it yourself? See [Building](docs/BUILDING.md).
 
-| Argument | Effect |
+## Documentation
+
+| | |
 |---|---|
-| `-ArgusDebugSection monitor` | Opens the main window on that section (`overview`, `monitor`, `map`, `rules`, `blocklists`, `profiles`, `security`, `capture`) |
-| `-ArgusDebugAlert YES` | Shows a sample connection alert |
-| `-ArgusDebugDownloadLocation YES` | Downloads the location database at launch |
-| `-ArgusDebugMenu YES` | Shows the status menu's content in a normal window |
-| `-hasCompletedOnboarding YES` | Skips the welcome guide |
-
-## Releasing
-
-Releases are signed with Developer ID, notarized, and published on GitHub Releases with a Sparkle
-update feed, so installed copies update themselves.
-
-One-time setup:
-
-1. In Xcode › Settings › Accounts › Manage Certificates, add a **Developer ID Application** certificate.
-2. Store notarization credentials (an [app-specific password](https://support.apple.com/102654)):
-   ```sh
-   xcrun notarytool store-credentials argus-notary --apple-id YOUR_APPLE_ID --team-id YOUR_TEAM_ID
-   ```
-3. Create the update-signing key and configure the feed:
-   ```sh
-   scripts/setup-updates.sh
-   ```
-   The private key stays in your login Keychain; back it up as the script describes. Losing it means
-   existing installs can't verify future updates.
-
-For each release, raise `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `project.yml`, commit,
-then run `scripts/release.sh`. It archives, exports with Developer ID, notarizes and staples, signs
-the update and writes `appcast.xml`, and creates the GitHub release with both attached.
-
-## Privacy
-
-Nothing about your connections leaves the Mac. Argus downloads only what you ask for: blocklists from
-their maintainers and, if you opt in, the public address registration files of the five regional internet
-registries (ARIN, RIPE NCC, APNIC, LACNIC, AFRINIC) for server locations.
-
-## Known limitations
-
-- Monitor mode observes after the fact; it can't hold or block a connection.
-- Server locations are where an address block is *registered*, which for large CDNs may differ from where
-  the server physically is.
-- Without Local Network permission macOS hides the router's hardware address, so networks are recognised
-  by router address until you click **Identify Router** in Profiles. Wi-Fi names need Location Services.
-- The sandboxed filter can't inspect other users' processes for `/dev/bpf` access; detection is limited
-  to what the sandbox allows.
+| [Disclaimer and Terms of Use](docs/TERMS.md) | The terms you accept before Argus runs |
+| [All features](docs/FEATURES.md) | Everything Argus does |
+| [Building](docs/BUILDING.md) | Monitor mode and filter mode, building, enabling the network filter |
+| [Command line](docs/COMMAND-LINE.md) | The `argus` tool |
+| [Architecture](docs/ARCHITECTURE.md) | How it fits together, suggested answers, rule precedence |
+| [Privacy](docs/PRIVACY.md) | What leaves your Mac (nothing about your connections) |
+| [Known limitations](docs/LIMITATIONS.md) | What Argus can't do |
+| [Development](docs/DEVELOPMENT.md) | Tests, debug options, demo mode, diagnosing the filter |
+| [Releasing](docs/RELEASING.md) | Signing, notarizing and publishing updates |
 
 ## License
 
 Argus is available under the [MIT License](LICENSE). Community blocklists and registry data are
 downloaded at runtime from their maintainers and remain under their own licenses.
+
+The screenshots show made-up activity from Argus's [demo mode](docs/DEVELOPMENT.md#demo-mode-and-the-readme-screenshots).

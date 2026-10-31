@@ -100,12 +100,10 @@ struct OnboardingView: View {
                         "This copy of Argus wasn't built with Apple's Network Extension entitlement, so it can't install the filter. It will still show you every connection, map where data goes, and keep your rules and blocklists ready for when a signed build installs the filter.")
             case .enabled:
                 infoBox("checkmark.shield.fill", .allowed, "The filter is installed", "Argus is ready to protect this Mac.")
-            case .awaitingApproval:
+            case .awaitingApproval, .turnedOffInSystemSettings:
                 infoBox("hand.raised.fill", .orange, "One more step",
                         "macOS needs your permission. Open System Settings › General › Login Items & Extensions › Network Extensions and turn on Argus.")
-                Button("Open System Settings") {
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")!)
-                }
+                Button("Open System Settings") { FilterManager.openExtensionSettings() }
             case .installing, .checking:
                 ProgressView("Installing…")
             case .failed(let message):

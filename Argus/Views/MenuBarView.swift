@@ -14,9 +14,18 @@ struct MenuBarView: View {
             HealthBanner(compact: true)
             LearningBanner(compact: true)
             if model.engine == .monitor {
-                Label("Monitoring only — can't block yet", systemImage: "eye.trianglebadge.exclamationmark")
+                if [.awaitingApproval, .turnedOffInSystemSettings].contains(model.filter.status) {
+                    Button { FilterManager.openExtensionSettings() } label: {
+                        Label("Filter switched off in System Settings — Fix…", systemImage: "eye.trianglebadge.exclamationmark")
+                    }
+                    .buttonStyle(.plain)
                     .font(.caption)
                     .foregroundStyle(.orange)
+                } else {
+                    Label("Monitoring only — can't block yet", systemImage: "eye.trianglebadge.exclamationmark")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             }
             traffic
             modePicker
@@ -89,6 +98,7 @@ struct MenuBarView: View {
     }
 
     private var troubleshootTitle: String {
+        if DebugLaunch.demo { return "Safari not working?" } // not whatever is really in front
         if let app = model.busy.foregroundApp?.localizedName { return "\(app) not working?" }
         return "Something not working?"
     }

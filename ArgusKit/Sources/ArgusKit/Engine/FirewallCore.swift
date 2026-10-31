@@ -190,6 +190,11 @@ public final class FirewallCore: @unchecked Sendable {
         return verdict
     }
 
+    /// The filter asked for no reports on this flow, so it will never hear that it closed.
+    public func flowWontBeReported(_ id: UUID) {
+        activity.updateFlow(id, totalIn: 0, totalOut: 0, closed: true)
+    }
+
     public func flowStatistics(_ id: UUID, totalIn: UInt64, totalOut: UInt64, closed: Bool) {
         activity.updateFlow(id, totalIn: totalIn, totalOut: totalOut, closed: closed)
         if closed { captures.endFlow(id) }
@@ -239,7 +244,7 @@ public final class FirewallCore: @unchecked Sendable {
 
         if let match = compiled.evaluate(ctx) {
             if checkSignatures, match.action == .allow, settings.enforceCodeSignatures, let rule = match.rule,
-               let requirement = rule.codeRequirement, let problem = signatureProblem(requirement, ctx) {
+               let requirement = rule.codeRequirement, let problem = signatureProblem(requirement, rule: rule, ctx) {
                 let isNew = inner.withLock { inner in
                     if inner.warnedSignatureProblems.count > 1000 { inner.warnedSignatureProblems.removeAll() }
                     return inner.warnedSignatureProblems.insert("\(ctx.pid):\(ctx.process.path)").inserted
@@ -500,7 +505,14 @@ public final class FirewallCore: @unchecked Sendable {
     }
 
     /// Why a process may not use a rule that remembers its signature, or nil when it may.
-    private func signatureProblem(_ requirement: String, _ ctx: FlowContext) -> (title: String, detail: String)? {
+    private func signatureProblem(_ requirement: String, rule: Rule, _ ctx: FlowContext) -> (title: String, detail: String)? {
+        // A rule for the helper is about the helper, whose signature was read from its own audit
+        // token when the connection arrived.
+        if ctx.viaIsHelper, let helper = ctx.via, rule.process.path == helper.path {
+            guard helper.designatedRequirement != requirement else { return nil }
+            return ("Blocked \(helper.name): code signature changed",
+                    "A rule allows \(helper.path), but it no longer matches the signature it had when the rule was made. It may have been replaced by malware.")
+        }
         switch requirementChecker(requirement, ctx) {
         case .satisfied:
             return nil

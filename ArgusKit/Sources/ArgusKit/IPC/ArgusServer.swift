@@ -34,6 +34,15 @@ public final class ArgusServer: FirewallCoreDelegate, @unchecked Sendable {
             })
     }
 
+    /// Disconnects every client, so they reconnect to whatever serves them next.
+    public func closeAll() {
+        let all = sessions.withLock { sessions -> [Session] in
+            defer { sessions = [:] }
+            return Array(sessions.values)
+        }
+        all.forEach { $0.channel.close() }
+    }
+
     public var interactiveClientCount: Int {
         sessions.withLock { $0.values.filter(\.wantsAlerts).count }
     }

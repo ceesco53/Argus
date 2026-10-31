@@ -127,12 +127,42 @@ struct MenuBarLabel: View {
 
 /// Development aid: `-ArgusDebugSection monitor` opens the main window on that section at launch.
 enum DebugLaunch {
+    /// `-ArgusDemo YES` runs on made-up activity for screenshots (see `DemoEngine`), away from the
+    /// real filter, configuration, iCloud, widgets and notifications.
+    static var demo: Bool {
+        #if DEBUG
+        UserDefaults.standard.bool(forKey: "ArgusDemo")
+        #else
+        false
+        #endif
+    }
+
+    /// `-ArgusDebugWindowSize 1440x900` sizes the main window, for screenshots.
+    static var windowSize: CGSize? {
+        #if DEBUG
+        guard let text = UserDefaults.standard.string(forKey: "ArgusDebugWindowSize") else { return nil }
+        let parts = text.split(separator: "x").compactMap { Double($0) }
+        return parts.count == 2 ? CGSize(width: parts[0], height: parts[1]) : nil
+        #else
+        nil
+        #endif
+    }
+
     /// `-ArgusDebugDownloadLocation YES` fetches the location database at launch.
     static var downloadLocation: Bool {
         #if DEBUG
         UserDefaults.standard.bool(forKey: "ArgusDebugDownloadLocation")
         #else
         false
+        #endif
+    }
+
+    /// `-ArgusDebugSearch TEXT` starts the Network Monitor with that search, for screenshots.
+    static var search: String {
+        #if DEBUG
+        UserDefaults.standard.string(forKey: "ArgusDebugSearch") ?? ""
+        #else
+        ""
         #endif
     }
 

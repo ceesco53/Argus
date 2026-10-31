@@ -449,23 +449,42 @@ struct MonitorModeBanner: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Monitor mode: Argus is watching but can't block").font(.headline)
                 if !compact {
-                    Text(model.filter.isEntitled
-                         ? "Install the Argus network filter to hold new connections for your approval and enforce your rules and blocklists."
-                         : "This copy of Argus was built without Apple's Network Extension entitlement, so it can observe every connection but not stop one. Your rules are kept and take effect as soon as a signed build installs the filter.")
+                    Text(explanation)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer()
-            if model.filter.isEntitled {
-                Button("Install Filter…") { model.filter.install() }
-                    .buttonStyle(.borderedProminent)
+            switch model.filter.status {
+            case .notInstalled, .failed:
+                Button("Install Filter…") { model.filter.install() }.buttonStyle(.borderedProminent)
+            case .disabled:
+                Button("Turn On Filter") { Task { await model.filter.enable() } }.buttonStyle(.borderedProminent)
+            case .awaitingApproval, .turnedOffInSystemSettings:
+                Button("Open System Settings") { FilterManager.openExtensionSettings() }.buttonStyle(.borderedProminent)
+            case .unavailable, .enabled, .checking, .installing:
+                EmptyView()
             }
         }
         .padding(14)
         .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.orange.opacity(0.3)))
+    }
+
+    private var explanation: String {
+        switch model.filter.status {
+        case .unavailable:
+            "This copy of Argus was built without Apple's Network Extension entitlement, so it can observe every connection but not stop one. Your rules are kept and take effect as soon as a signed build installs the filter."
+        case .disabled:
+            "The network filter is turned off. Turn it on to hold new connections for your approval and enforce your rules and blocklists."
+        case .awaitingApproval, .turnedOffInSystemSettings:
+            "The filter is set up, but its switch in System Settings › General › Login Items & Extensions › Network Extensions is off. Turn on Argus there."
+        case .enabled, .checking, .installing:
+            "Connecting to the network filter…"
+        case .notInstalled, .failed:
+            "Install the Argus network filter to hold new connections for your approval and enforce your rules and blocklists."
+        }
     }
 }
 

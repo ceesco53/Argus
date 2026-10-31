@@ -28,6 +28,19 @@ public enum ProcessLookup {
 
     public static func parentPID(pid: Int32) -> Int32? { bsdInfo(pid: pid).map { Int32($0.pbi_ppid) } }
 
+    private typealias ResponsibleFunction = @convention(c) (pid_t) -> pid_t
+    private static let responsibleFunction: ResponsibleFunction? =
+        dlsym(UnsafeMutableRawPointer(bitPattern: -2), "responsibility_get_pid_responsible_for_pid") // RTLD_DEFAULT
+            .map { unsafeBitCast($0, to: ResponsibleFunction.self) }
+
+    /// The process macOS holds responsible for `pid`, such as the app an XPC service works for.
+    /// Uses a private, long-standing libSystem function; nil when it's unavailable or unknown.
+    public static func responsiblePID(for pid: Int32) -> Int32? {
+        guard pid > 0, let function = responsibleFunction else { return nil }
+        let owner = function(pid)
+        return owner > 0 ? owner : nil
+    }
+
     public static func allPIDs() -> [Int32] {
         let estimate = proc_listallpids(nil, 0)
         guard estimate > 0 else { return [] }

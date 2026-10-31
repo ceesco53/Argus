@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The terms everyone must accept before Argus runs. The README carries the same text.
+/// The terms everyone must accept before Argus runs. docs/TERMS.md carries the same text.
 enum Terms {
     /// Bump to ask everyone to accept changed terms.
     static let version = 1

@@ -281,3 +281,90 @@ func flow(_ process: ProcessIdentity = unknownApp, host: String? = "api.example.
         }
     }
 }
+
+@Suite struct WebKitAttributionTests {
+    static let webKit = ProcessIdentity(
+        path: "/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking",
+        name: "com.apple.WebKit.Networking", bundleIdentifier: "com.apple.WebKit.Networking", signature: .apple,
+        designatedRequirement: "identifier \"com.apple.WebKit.Networking\" and anchor apple")
+    static let safari = ProcessIdentity(path: "/Applications/Safari.app/Contents/MacOS/Safari", name: "Safari",
+                                        bundleIdentifier: "com.apple.Safari", signature: .apple,
+                                        designatedRequirement: "identifier \"com.apple.Safari\" and anchor apple")
+
+    /// A WebKit connection made for Safari (pid 4242 works for pid 777).
+    static func attributed(host: String = "grok.com") -> FlowContext {
+        flow(webKit, host: host).attributingWebKitTraffic(responsiblePID: { $0 == 4242 ? 777 : nil }, identity: { _ in safari })
+    }
+
+    @Test func webKitConnectionsAreFiledUnderTheirApp() {
+        let context = WebKitAttributionTests.attributed()
+        #expect(context.process.path == WebKitAttributionTests.safari.path)
+        #expect(context.via?.path == WebKitAttributionTests.webKit.path)
+        #expect(context.viaIsHelper)
+        #expect(context.pid == 777)
+        #expect(context.connectionKey.hasPrefix(WebKitAttributionTests.safari.path))
+
+        // Other programs, and connections whose app is already known, are left alone.
+        let other = flow().attributingWebKitTraffic(responsiblePID: { _ in 777 }, identity: { _ in WebKitAttributionTests.safari })
+        #expect(other.process.path == unknownApp.path && other.via == nil)
+        let unknownOwner = flow(WebKitAttributionTests.webKit).attributingWebKitTraffic(responsiblePID: { _ in nil })
+        #expect(unknownOwner.process.path == WebKitAttributionTests.webKit.path)
+    }
+
+    @Test func appRulesAndEarlierHelperRulesBothApply() {
+        let blockSafari = Rule(action: .deny, process: .path(WebKitAttributionTests.safari.path), remote: .any)
+        #expect(CompiledRuleSet(rules: [blockSafari], activeProfile: nil, blocklists: [])
+            .evaluate(WebKitAttributionTests.attributed())?.action == .deny) // "Block App" now covers its web traffic
+
+        let helperRule = Rule(action: .allow, process: .path(WebKitAttributionTests.webKit.path), remote: .domain("grok.com"))
+        let set = CompiledRuleSet(rules: [Rule(action: .deny, remote: .any), helperRule], activeProfile: nil, blocklists: [])
+        #expect(set.evaluate(WebKitAttributionTests.attributed())?.rule?.id == helperRule.id)
+        // The DNS resolver working for an app isn't a helper in this sense: its rules stay its own.
+        var lookup = flow(WebKitAttributionTests.safari, host: "grok.com")
+        lookup.via = WebKitAttributionTests.webKit
+        #expect(set.evaluate(lookup)?.rule?.id != helperRule.id)
+    }
+}
+
+@Suite struct HelperSignatureTests {
+    @Test func helperRulesAreCheckedAgainstTheHelper() async {
+        let (core, _) = makeCore()
+        core.requirementChecker = { _, _ in .violated } // the app itself would fail any check
+        var matching = Rule(action: .allow, process: .path(WebKitAttributionTests.webKit.path),
+                            codeRequirement: WebKitAttributionTests.webKit.designatedRequirement)
+        matching.remote = .domain("grok.com")
+        _ = await core.handle(.saveRule(matching), client: app, authorization: nil)
+        #expect(core.decide(flowID: UUID(), context: WebKitAttributionTests.attributed(), resume: { _ in })
+            == .allow(Verdict(.allow, .rule(matching.id))))
+
+        matching.codeRequirement = "identifier \"com.example.impostor\""
+        _ = await core.handle(.saveRule(matching), client: app, authorization: nil)
+        guard case .deny(let verdict) = core.decide(flowID: UUID(), context: WebKitAttributionTests.attributed(), resume: { _ in }) else {
+            Issue.record("expected deny")
+            return
+        }
+        #expect(verdict.reason == .signatureMismatch(matching.id))
+    }
+}
+
+@Suite struct PrivateRelayTests {
+    @Test func relayTunnelsAreRecognised() {
+        let proxy = ProcessIdentity(path: "/usr/libexec/networkserviceproxy", signature: .apple)
+        #expect(flow(proxy, host: nil, address: "17.248.1.1").isPrivateRelayTunnel)
+        #expect(flow(curl, host: "mask.icloud.com").isPrivateRelayTunnel)
+        #expect(flow(curl, host: "us-west.mask-h2.icloud.com").isPrivateRelayTunnel)
+        #expect(!flow(curl, host: "grok.com").isPrivateRelayTunnel)
+        #expect(!flow(curl, host: "notmask.icloud.com").isPrivateRelayTunnel)
+    }
+
+    @Test func unreportedFlowsDoNotStayOpen() async {
+        let (core, _) = makeCore()
+        _ = await core.handle(.setProtection(false), client: app, authorization: nil)
+        let id = UUID()
+        _ = core.decide(flowID: id, context: flow(), resume: { _ in })
+        func open() -> Int { core.activity.snapshot(since: 0).connections.first?.activeFlows ?? -1 }
+        #expect(open() == 1)
+        core.flowWontBeReported(id)
+        #expect(open() == 0)
+    }
+}
