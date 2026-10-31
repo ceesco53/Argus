@@ -173,3 +173,13 @@ import Testing
         #expect(core.pendingAlerts.isEmpty)
     }
 }
+
+@Suite struct SyncSafetyTests {
+    @Test func massRemovalsNeedConfirmation() {
+        #expect(!SyncSafety.needsConfirmation(removing: 1, of: 2)) // deleting a rule or two is ordinary
+        #expect(!SyncSafety.needsConfirmation(removing: 5, of: 5))
+        #expect(!SyncSafety.needsConfirmation(removing: 12, of: 200))
+        #expect(SyncSafety.needsConfirmation(removing: 182, of: 186)) // what wiped a configuration once
+        #expect(SyncSafety.needsConfirmation(removing: 6, of: 10))
+    }
+}

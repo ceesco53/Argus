@@ -436,6 +436,24 @@ private struct CloudSyncToggle: View {
             if let problem = cloud.problem {
                 Text(problem).font(.caption).foregroundStyle(.orange)
             }
+            switch cloud.conflict {
+            case .wouldRemoveElsewhere(let count):
+                Text("Sync is paused: it would remove \(count) rules, profiles and blocklists from your other Macs at once.")
+                    .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Button("Bring Them Back from iCloud") { Task { await cloud.useICloud() } }
+                    Button("Remove Them Everywhere") { cloud.keepThisMac() }
+                }
+            case .wouldRemoveHere(let count):
+                Text("Sync is paused: iCloud would remove \(count) rules, profiles and blocklists from this Mac at once.")
+                    .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Button("Keep This Mac's") { cloud.keepThisMac() }
+                    Button("Remove Them Here") { Task { await cloud.useICloud() } }
+                }
+            case nil:
+                EmptyView()
+            }
         }
     }
 

@@ -735,7 +735,10 @@ struct LearningBanner: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Review Now") { model.showReview = true }
+                Button("Review Now") {
+                    model.showReview = true
+                    AppDelegate.showMainWindow() // the review is a sheet on the main window
+                }
                     .buttonStyle(.borderedProminent)
                     .controlSize(compact ? .small : .regular)
             }

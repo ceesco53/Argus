@@ -15,8 +15,17 @@ final class CloudSync {
         case signedOut
     }
 
+    /// A sync that would have removed a lot at once, waiting for the user's decision.
+    enum Conflict: Equatable {
+        /// Syncing this Mac would remove this many rules, profiles and blocklists from the other Macs.
+        case wouldRemoveElsewhere(Int)
+        /// iCloud would remove this many from this Mac.
+        case wouldRemoveHere(Int)
+    }
+
     private(set) var lastSynced: Date?
     private(set) var problem: String?
+    private(set) var conflict: Conflict?
 
     @ObservationIgnored private weak var model: AppModel?
     @ObservationIgnored private var observer: NSObjectProtocol?
@@ -26,6 +35,8 @@ final class CloudSync {
     static let key = "argus.configuration.v1"
     private static let enabledKey = "iCloudSync"
     private static let syncedIDsKey = "iCloudSyncedIDs"
+    /// Which engine's configuration `syncedIDs` came from.
+    private static let syncedEngineKey = "iCloudSyncedEngine"
 
     /// Never in demo mode: its made-up rules must not reach the real ones on other Macs.
     var isEnabled: Bool { !DebugLaunch.demo && UserDefaults.standard.bool(forKey: CloudSync.enabledKey) }
@@ -96,6 +107,7 @@ final class CloudSync {
     func setEnabled(_ enabled: Bool) {
         UserDefaults.standard.set(enabled, forKey: CloudSync.enabledKey)
         problem = nil
+        conflict = nil
         guard enabled, availability == .available else { return }
         NSUbiquitousKeyValueStore.default.synchronize()
         Task {
@@ -106,7 +118,7 @@ final class CloudSync {
 
     /// The configuration changed on this Mac.
     func localChanged() {
-        guard isEnabled, !applyingRemote, availability == .available else { return }
+        guard isEnabled, !applyingRemote, availability == .available, model?.engineHoldsConfiguration == true else { return }
         pendingUpload?.cancel()
         pendingUpload = Task {
             try? await Task.sleep(for: .seconds(4))
@@ -131,14 +143,32 @@ final class CloudSync {
         Set(state.rules.filter(CloudSync.syncable).map(\.id) + state.profiles.map(\.id) + state.ruleGroups.filter { $0.url != nil }.map(\.id))
     }
 
-    private func upload() {
-        guard let model else { return }
+    /// The engine whose configuration is being synced, so a different engine's items aren't taken
+    /// for deletions.
+    private var engineKind: String { model?.engine == .filter ? "filter" : "monitor" }
+    private var baselineIsThisEngine: Bool { UserDefaults.standard.string(forKey: CloudSync.syncedEngineKey) == engineKind }
+
+    private func setBaseline(_ ids: Set<UUID>) {
+        syncedIDs = ids
+        UserDefaults.standard.set(engineKind, forKey: CloudSync.syncedEngineKey)
+    }
+
+    /// - Parameter force: the user agreed to a large removal.
+    private func upload(force: Bool = false) {
+        guard let model, model.engineHoldsConfiguration, conflict == nil || force else { return }
         let state = model.state
         let remote = readRemote()
         let now = Date()
         let present = localIDs(state)
+        // Deleted here since the last sync. Items another engine had aren't deletions: this engine
+        // simply never had them.
+        let removed = baselineIsThisEngine ? syncedIDs.subtracting(present) : []
+        if !force, SyncSafety.needsConfirmation(removing: removed.count, of: syncedIDs.count) {
+            pause(.wouldRemoveElsewhere(removed.count))
+            return
+        }
         var deleted = remote?.deleted ?? [:]
-        for id in syncedIDs.subtracting(present) where deleted[id] == nil { deleted[id] = now } // deleted here since the last sync
+        for id in removed where deleted[id] == nil { deleted[id] = now }
         for id in present { deleted[id] = nil }
         deleted = deleted.filter { now.timeIntervalSince($0.value) < 60 * 86_400 }
         let payload = Payload(
@@ -150,7 +180,7 @@ final class CloudSync {
                                             isEnabled: group.isEnabled, format: group.format) }
             },
             deleted: deleted)
-        syncedIDs = present
+        setBaseline(present)
         if let remote, payload.sameContent(as: remote) { return }
         guard let data = try? JSONEncoder().encode(payload), data.count < 900_000 else {
             problem = "There are too many rules to sync through iCloud (the limit is about 1 MB)."
@@ -165,10 +195,15 @@ final class CloudSync {
     // MARK: Download
 
     /// Merges what other Macs uploaded: newer versions win; deletions apply to older copies.
-    func pull() async {
-        guard isEnabled, availability == .available, let model, let remote = readRemote() else { return }
+    /// - Parameters:
+    ///   - force: the user agreed to a large removal.
+    ///   - restoring: bring back what this Mac removed, from iCloud.
+    func pull(force: Bool = false, restoring: Bool = false) async {
+        guard isEnabled, availability == .available, let model, model.engineHoldsConfiguration,
+              conflict == nil || force, let remote = readRemote() else { return }
         let state = model.state
-        let deletedHere = syncedIDs.subtracting(localIDs(state)) // don't resurrect what this Mac just deleted
+        // Don't resurrect what this Mac just deleted (unless asked to).
+        let deletedHere = baselineIsThisEngine && !restoring ? syncedIDs.subtracting(localIDs(state)) : []
         func same(_ a: Rule, _ b: Rule) -> Bool {
             var a = a, b = b
             a.modifiedAt = .distantPast
@@ -177,13 +212,16 @@ final class CloudSync {
         }
 
         var rulesToSave: [Rule] = []
+        var newRules: [Rule] = []
         for rule in remote.rules where !deletedHere.contains(rule.id) {
             if let mine = state.rules.first(where: { $0.id == rule.id }) {
                 if !same(mine, rule), rule.modifiedAt > mine.modifiedAt { rulesToSave.append(rule) }
             } else {
-                rulesToSave.append(rule)
+                newRules.append(rule)
             }
         }
+        // A rule that does exactly what one here does (each Mac's starter rules, say) isn't new.
+        rulesToSave += RuleAnalysis.withoutDuplicates(newRules, of: state.rules)
         let rulesToDelete = state.rules.filter { rule in remote.deleted[rule.id].map { rule.modifiedAt < $0 } ?? false }.map(\.id)
         let profilesToSave = remote.profiles.filter { profile in
             !deletedHere.contains(profile.id) && state.profile(id: profile.id) != profile && remote.device != deviceID
@@ -204,6 +242,11 @@ final class CloudSync {
             return group
         }
         let groupsToDelete = state.ruleGroups.filter { remote.deleted[$0.id] != nil }.map(\.id)
+        let removals = rulesToDelete.count + profilesToDelete.count + groupsToDelete.count
+        if !force, SyncSafety.needsConfirmation(removing: removals, of: localIDs(state).count) {
+            pause(.wouldRemoveHere(removals))
+            return
+        }
 
         applyingRemote = true
         defer { applyingRemote = false }
@@ -213,7 +256,31 @@ final class CloudSync {
         for id in profilesToDelete { await model.perform(.deleteProfile(id)) }
         for group in groupsToSave { await model.perform(.saveRuleGroup(group)) }
         for id in groupsToDelete { await model.perform(.deleteRuleGroup(id)) }
-        syncedIDs = localIDs(model.state)
+        setBaseline(localIDs(model.state))
         lastSynced = Date()
+    }
+
+    // MARK: Large removals
+
+    private func pause(_ conflict: Conflict) {
+        guard self.conflict == nil else { return }
+        self.conflict = conflict
+        model?.notifier.post(id: "argus-sync-paused", title: "iCloud sync is paused",
+                             body: "Syncing would remove a lot of rules at once. Open Argus Settings › General to decide.")
+    }
+
+    /// This Mac's configuration wins: what it doesn't have is removed everywhere, and what it has
+    /// stays (clearing iCloud's deletions of it).
+    func keepThisMac() {
+        conflict = nil
+        upload(force: true)
+    }
+
+    /// iCloud wins: for removals here, they're applied; for removals elsewhere, the items come back.
+    func useICloud() async {
+        let restoring = conflict.map { if case .wouldRemoveElsewhere = $0 { true } else { false } } ?? false
+        conflict = nil
+        await pull(force: true, restoring: restoring)
+        upload()
     }
 }

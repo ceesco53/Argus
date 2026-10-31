@@ -55,6 +55,17 @@ final class AppModel {
 
     // Engine
     private(set) var engine: Engine = .starting
+
+    /// Whether the engine Argus is connected to holds this Mac's real configuration. The built-in
+    /// monitor only stands in while the filter can't be reached, with rules of its own; syncing
+    /// those once made everything else look deleted.
+    var engineHoldsConfiguration: Bool {
+        switch engine {
+        case .filter: true
+        case .monitor: filter.status == .unavailable || filter.status == .notInstalled
+        case .starting: false
+        }
+    }
     private(set) var hello: ServerHello?
 
     // Configuration
