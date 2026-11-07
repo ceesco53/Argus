@@ -133,3 +133,26 @@ public struct CompiledRuleSet: Sendable {
         }
     }
 }
+
+extension CompiledRuleSet {
+    /// The rules of a configuration (not its blocklists), as the engine applies them.
+    public init(rulesOf state: FirewallState, now: Date = Date()) {
+        let groups = state.ruleGroups.filter(\.isEnabled)
+        self.init(rules: state.rules + groups.flatMap(\.rules), activeProfile: state.settings.activeProfileID,
+                  blocklists: [], browsersOnly: Set(groups.filter(\.isBrowsersOnly).map(\.id)), now: now)
+    }
+
+    /// Whether an allow rule made or changed since this connection was blocked now lets it through,
+    /// so lists of what was blocked can drop it. If it's blocked again, the newer block shows instead.
+    /// - Parameter process: the program as Argus knows it, so rules for browsers only apply.
+    public func allowsSinceBlocked(_ entry: FlowLogEntry, process: ProcessIdentity? = nil) -> Bool {
+        guard entry.verdict.action == .deny else { return false }
+        let remoteAddress = IPAddress(entry.remote)
+        let hostname = entry.remote == "unknown" || remoteAddress != nil ? nil : entry.remote
+        let flow = FlowContext(process: process ?? ProcessIdentity(path: entry.processPath, name: entry.processName),
+                               userID: entry.userID, hostname: hostname, address: entry.address.flatMap(IPAddress.init) ?? remoteAddress,
+                               remotePort: entry.port, localPort: entry.port, proto: entry.proto, direction: entry.direction)
+        guard let match = evaluate(flow), match.action == .allow, let rule = match.rule else { return false }
+        return rule.modifiedAt > entry.date
+    }
+}

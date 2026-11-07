@@ -73,7 +73,10 @@ final class AppModel {
 
     // Configuration
     private(set) var state = FirewallState() {
-        didSet { if state.revision != oldValue.revision { cloud.localChanged() } }
+        didSet {
+            compiledRulesCache = nil
+            if state.revision != oldValue.revision { cloud.localChanged() }
+        }
     }
 
     // Activity
@@ -532,13 +535,26 @@ final class AppModel {
     /// Whether Argus is currently letting everything through.
     var isAsleep: Bool { !state.settings.protectionEnabled || pausedUntil != nil }
 
-    /// The latest denial per program and destination, newest first.
+    /// The latest denial per program and destination, newest first. One a rule has allowed since
+    /// drops off, and comes back if it's blocked again (or the rule is undone).
     var recentlyBlocked: [FlowLogEntry] {
         var seen = Set<String>()
+        let rules = compiledRules
         return log.reversed().filter { entry in
             entry.verdict.action == .deny && seen.insert("\(entry.processPath)|\(entry.remote)").inserted
+                && !rules.allowsSinceBlocked(entry, process: processes[entry.processPath]?.identity)
         }
     }
+
+    /// The rules as the engine applies them, rebuilt when the configuration changes.
+    private var compiledRules: CompiledRuleSet {
+        if let compiledRulesCache { return compiledRulesCache }
+        let rules = CompiledRuleSet(rulesOf: state)
+        compiledRulesCache = rules
+        return rules
+    }
+
+    @ObservationIgnored private var compiledRulesCache: CompiledRuleSet?
 
     /// Allows what a log entry shows was blocked, for its program or for every program.
     func allow(_ entry: FlowLogEntry, forAllApps: Bool) async {

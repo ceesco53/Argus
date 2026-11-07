@@ -368,3 +368,64 @@ func flow(_ process: ProcessIdentity = unknownApp, host: String? = "api.example.
         #expect(open() == 0)
     }
 }
+
+/// What drops off "Recently blocked" once it's been allowed.
+@Suite struct RecentlyBlockedTests {
+    let blockedAt = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func blocked(_ remote: String, process: ProcessIdentity = unknownApp, address: String? = nil,
+                 action: RuleAction = .deny) -> FlowLogEntry {
+        FlowLogEntry(id: 1, date: blockedAt, processPath: process.path, processName: process.name, remote: remote,
+                     address: address ?? (IPAddress(remote) != nil ? remote : "93.184.216.34"), port: 443, proto: .tcp,
+                     direction: .outgoing, userID: 501, verdict: Verdict(action, .alertTimeout))
+    }
+
+    func rules(_ rules: [Rule], groups: [RuleGroup] = []) -> CompiledRuleSet {
+        var state = FirewallState()
+        state.rules = rules
+        state.ruleGroups = groups
+        return CompiledRuleSet(rulesOf: state, now: blockedAt.addingTimeInterval(120))
+    }
+
+    var later: Date { blockedAt.addingTimeInterval(60) }
+
+    @Test func anAllowMadeSinceDropsIt() {
+        let entry = blocked("212.102.63.140")
+        #expect(!rules([]).allowsSinceBlocked(entry))
+        let forApp = Rule(action: .allow, process: .path(unknownApp.path), remote: .address("212.102.63.140"), createdAt: later)
+        #expect(rules([forApp]).allowsSinceBlocked(entry))
+        let forAll = Rule(action: .allow, remote: .host("ads.example.com"), createdAt: later)
+        #expect(rules([forAll]).allowsSinceBlocked(blocked("ads.example.com")))
+        let forDomain = Rule(action: .allow, process: .path(unknownApp.path), remote: .domain("example.com"), createdAt: later)
+        #expect(rules([forDomain]).allowsSinceBlocked(blocked("ads.example.com")))
+    }
+
+    @Test func itStaysWhileItWouldStillBeBlocked() {
+        let entry = blocked("ads.example.com")
+        let older = Rule(action: .allow, process: .path(unknownApp.path), remote: .host("ads.example.com"),
+                         createdAt: blockedAt.addingTimeInterval(-60))
+        #expect(!rules([older]).allowsSinceBlocked(entry))
+        var off = Rule(action: .allow, process: .path(unknownApp.path), remote: .host("ads.example.com"), createdAt: later)
+        off.isEnabled = false
+        #expect(!rules([off]).allowsSinceBlocked(entry))
+        let allow = Rule(action: .allow, remote: .host("ads.example.com"), createdAt: later)
+        let deny = Rule(action: .deny, process: .path(unknownApp.path), remote: .host("ads.example.com"), isPriority: true)
+        #expect(!rules([allow, deny]).allowsSinceBlocked(entry))
+        let otherApp = Rule(action: .allow, process: .path("/Applications/Other.app/Contents/MacOS/Other"),
+                            remote: .host("ads.example.com"), createdAt: later)
+        #expect(!rules([otherApp]).allowsSinceBlocked(entry))
+        let expired = Rule(action: .allow, process: .path(unknownApp.path), remote: .host("ads.example.com"),
+                           expiration: .date(blockedAt.addingTimeInterval(90)), createdAt: later)
+        #expect(!rules([expired]).allowsSinceBlocked(entry))
+        let allowed = Rule(action: .allow, process: .path(unknownApp.path), remote: .host("ads.example.com"), createdAt: later)
+        #expect(!rules([allowed]).allowsSinceBlocked(blocked("ads.example.com", action: .allow)))
+    }
+
+    @Test func adDomainsAllowsCountOnlyInBrowsers() throws {
+        var group = RuleGroup.adDomains()
+        try group.apply([AdDomainDecision(.domain("example.com"), .allow)], now: later)
+        let compiled = rules([], groups: [group])
+        #expect(compiled.allowsSinceBlocked(blocked("ads.example.com", process: Chrome.app), process: Chrome.app))
+        #expect(!compiled.allowsSinceBlocked(blocked("ads.example.com")))
+    }
+}

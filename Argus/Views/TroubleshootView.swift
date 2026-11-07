@@ -122,6 +122,7 @@ struct TroubleshootView: View {
                 }
             }
         }
+        .animation(.default, value: blocked.map(\.id))
         .card()
     }
 

@@ -250,6 +250,7 @@ private struct RecentlyBlockedCard: View {
                 BlockedRow(entry: entry, model: model)
             }
         }
+        .animation(.default, value: blocked.map(\.id))
         .card()
     }
 }
