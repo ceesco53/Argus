@@ -293,7 +293,7 @@ func flow(_ process: ProcessIdentity = unknownApp, host: String? = "api.example.
 
     /// A WebKit connection made for Safari (pid 4242 works for pid 777).
     static func attributed(host: String = "grok.com") -> FlowContext {
-        flow(webKit, host: host).attributingWebKitTraffic(responsiblePID: { $0 == 4242 ? 777 : nil }, identity: { _ in safari })
+        flow(webKit, host: host).attributingHelperTraffic(responsiblePID: { $0 == 4242 ? 777 : nil }, identity: { _ in safari })
     }
 
     @Test func webKitConnectionsAreFiledUnderTheirApp() {
@@ -305,9 +305,9 @@ func flow(_ process: ProcessIdentity = unknownApp, host: String? = "api.example.
         #expect(context.connectionKey.hasPrefix(WebKitAttributionTests.safari.path))
 
         // Other programs, and connections whose app is already known, are left alone.
-        let other = flow().attributingWebKitTraffic(responsiblePID: { _ in 777 }, identity: { _ in WebKitAttributionTests.safari })
+        let other = flow().attributingHelperTraffic(responsiblePID: { _ in 777 }, identity: { _ in WebKitAttributionTests.safari })
         #expect(other.process.path == unknownApp.path && other.via == nil)
-        let unknownOwner = flow(WebKitAttributionTests.webKit).attributingWebKitTraffic(responsiblePID: { _ in nil })
+        let unknownOwner = flow(WebKitAttributionTests.webKit).attributingHelperTraffic(responsiblePID: { _ in nil })
         #expect(unknownOwner.process.path == WebKitAttributionTests.webKit.path)
     }
 

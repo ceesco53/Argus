@@ -241,7 +241,7 @@ final class FilterDataProvider: NEFilterDataProvider, @unchecked Sendable {
             hostname: flow.remoteHostname ?? endpointName, address: remoteAddress, remotePort: remotePort,
             localAddress: localAddress, localPort: localPort, proto: TransportProtocol(rawValue: flow.socketProtocol),
             direction: flow.direction == .inbound ? .incoming : .outgoing
-        ).attributingWebKitTraffic()
+        ).attributingHelperTraffic()
     }
 
     private static func split(_ endpoint: Network.NWEndpoint?) -> (ArgusKit.IPAddress?, UInt16, String?) {

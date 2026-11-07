@@ -20,18 +20,25 @@ public struct CompiledRuleSet: Sendable {
         let rule: Rule
         let specificity: Specificity
         let network: IPNetwork?
+        /// From a group that applies to browsers only.
+        let browsersOnly: Bool
     }
 
     private var anyProcess: [Entry] = []
     private var byPath: [String: [Entry]] = [:]
-    private var blocklists: [(id: UUID, list: CompiledBlocklist)] = []
+    private var blocklists: [(id: UUID, list: CompiledBlocklist, browsersOnly: Bool)] = []
+    /// Ad Domains' allows: exceptions to every list, however deep the list's own entry.
+    private var listExceptions: [Entry] = []
+    private var hasBrowserScope = false
 
     public init() {}
 
     /// - Parameters:
     ///   - rules: user rules plus the rules of enabled rule groups.
     ///   - activeProfile: rules bound to other profiles are left out.
-    public init(rules: [Rule], activeProfile: UUID?, blocklists: [(UUID, CompiledBlocklist)], now: Date = Date()) {
+    ///   - browsersOnly: rule groups and blocklists that apply to browsers only.
+    public init(rules: [Rule], activeProfile: UUID?, blocklists: [(UUID, CompiledBlocklist)], browsersOnly: Set<UUID> = [],
+                now: Date = Date()) {
         for rule in rules where rule.isEnabled {
             if let profile = rule.profileID, profile != activeProfile { continue }
             if case .date(let end) = rule.expiration, end <= now { continue }
@@ -40,13 +47,18 @@ public struct CompiledRuleSet: Sendable {
                 guard let parsed = IPNetwork(text) else { continue }
                 network = parsed
             }
-            let entry = Entry(rule: rule, specificity: Specificity(rule: rule), network: network)
+            var group: UUID?
+            if case .ruleGroup(let id) = rule.origin { group = id }
+            let entry = Entry(rule: rule, specificity: Specificity(rule: rule), network: network,
+                              browsersOnly: group.map(browsersOnly.contains) ?? false)
             switch rule.process {
             case .any: anyProcess.append(entry)
             case .path(let path): byPath[path, default: []].append(entry)
             }
+            if group == RuleGroup.adDomainsID, rule.action == .allow { listExceptions.append(entry) }
         }
-        self.blocklists = blocklists.map { (id: $0.0, list: $0.1) }
+        self.blocklists = blocklists.map { (id: $0.0, list: $0.1, browsersOnly: browsersOnly.contains($0.0)) }
+        hasBrowserScope = !browsersOnly.isEmpty
     }
 
     public func evaluate(_ flow: FlowContext) -> RuleMatch? {
@@ -54,23 +66,26 @@ public struct CompiledRuleSet: Sendable {
         func consider(_ candidate: RuleMatch) {
             if best == nil || best!.specificity < candidate.specificity { best = candidate }
         }
-        for entry in byPath[flow.process.path] ?? [] where CompiledRuleSet.matches(entry, flow) {
+        let isBrowser = hasBrowserScope && flow.isBrowser
+        func applies(_ entry: Entry) -> Bool { (!entry.browsersOnly || isBrowser) && CompiledRuleSet.matches(entry, flow) }
+        for entry in byPath[flow.process.path] ?? [] where applies(entry) {
             consider(RuleMatch(action: entry.rule.action, rule: entry.rule, specificity: entry.specificity))
         }
         // Rules made for a helper before its traffic was filed under the app it works for.
         if flow.viaIsHelper, let helper = flow.via?.path {
-            for entry in byPath[helper] ?? [] where CompiledRuleSet.matches(entry, flow) {
+            for entry in byPath[helper] ?? [] where applies(entry) {
                 consider(RuleMatch(action: entry.rule.action, rule: entry.rule, specificity: entry.specificity))
             }
         }
-        for entry in anyProcess where CompiledRuleSet.matches(entry, flow) {
+        for entry in anyProcess where applies(entry) {
             consider(RuleMatch(action: entry.rule.action, rule: entry.rule, specificity: entry.specificity))
         }
         // Blocklists act like "deny any process" rules, so a process-specific or priority
-        // rule always outranks them and the lookup can be skipped.
+        // rule always outranks them and the lookup can be skipped. So does an exception.
         let blocklistCanWin = best.map { $0.specificity.priority == 0 && $0.specificity.process == 0 } ?? true
-        if flow.direction == .outgoing, blocklistCanWin {
-            for (id, list) in blocklists {
+        let excepted = !listExceptions.isEmpty && listExceptions.contains(where: applies)
+        if flow.direction == .outgoing, blocklistCanWin, !excepted {
+            for (id, list, browsersOnly) in blocklists where !browsersOnly || isBrowser {
                 if let host = flow.hostname, let match = list.domains.match(host) {
                     let score: Int = switch match {
                     case .exact: 1000

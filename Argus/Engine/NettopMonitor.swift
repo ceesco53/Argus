@@ -145,7 +145,7 @@ final class NettopMonitor: @unchecked Sendable {
             process: identity, pid: pid, processStartTime: ProcessLookup.startTime(pid: pid),
             userID: ProcessLookup.userID(pid: pid) ?? getuid(), address: remoteAddress, remotePort: remotePort,
             localAddress: local.address, localPort: localPort, proto: proto, direction: incoming ? .incoming : .outgoing
-        ).attributingWebKitTraffic()
+        ).attributingHelperTraffic()
         var connection = Connection(id: UUID(), context: context, totalIn: totalIn, totalOut: totalOut)
         if completedSamples == 0 {
             connection.baselineIn = totalIn

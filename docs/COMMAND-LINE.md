@@ -10,6 +10,8 @@ argus rules add deny --process Safari --domain doubleclick.net
 argus rules add allow --process /usr/bin/curl --host api.example.com --port 443 --proto tcp --for 2h
 argus profiles activate Work
 argus blocklists add hagezi-light          # or any URL; see `argus blocklists catalog`
+argus ads light                             # Ads in Browsers: off, light, normal or pro
+argus ads block taboola.com                 # your ad domains, in browsers (allow, auto; --host for one server)
 argus log --follow
 argus blocked                               # what was blocked recently, and why
 argus allow news.google.com                 # always allow a host (add --domain or --process NAME)

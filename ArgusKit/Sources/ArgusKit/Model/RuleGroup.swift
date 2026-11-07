@@ -40,8 +40,12 @@ public struct RuleGroup: Codable, Hashable, Sendable, Identifiable {
     public var hostCount: Int
     public var domainCount: Int
     public var addressCount: Int
-    /// Ordinary rules shipped by a `.lsrules` group.
+    /// Ordinary rules shipped by a `.lsrules` group, or the user's own in Ad Domains.
     public var rules: [Rule]
+    /// Which apps the list applies to; nil means every app.
+    public var appliesTo: AppScope?
+    /// When the user last changed the group's own contents (Ad Domains), for syncing between Macs.
+    public var modifiedAt: Date?
 
     public init(
         id: UUID = UUID(),
@@ -51,7 +55,8 @@ public struct RuleGroup: Codable, Hashable, Sendable, Identifiable {
         catalogID: String? = nil,
         isEnabled: Bool = true,
         format: BlocklistFormat = .automatic,
-        updateInterval: TimeInterval = 86_400
+        updateInterval: TimeInterval = 86_400,
+        appliesTo: AppScope? = nil
     ) {
         self.id = id
         self.name = name
@@ -61,11 +66,14 @@ public struct RuleGroup: Codable, Hashable, Sendable, Identifiable {
         self.isEnabled = isEnabled
         self.format = format
         self.updateInterval = updateInterval
+        self.appliesTo = appliesTo
         hostCount = 0
         domainCount = 0
         addressCount = 0
         rules = []
     }
+
+    public var isBrowsersOnly: Bool { appliesTo == .browsers }
 
     public var entryCount: Int { hostCount + domainCount + addressCount + rules.count }
 
@@ -74,6 +82,103 @@ public struct RuleGroup: Codable, Hashable, Sendable, Identifiable {
         guard let lastAttempt else { return true }
         let interval = lastError == nil ? updateInterval : min(updateInterval, 3600)
         return now.timeIntervalSince(lastAttempt) >= interval
+    }
+}
+
+/// Which apps a blocklist or rule group applies to.
+public enum AppScope: String, Codable, Sendable, CaseIterable {
+    case allApps, browsers
+
+    public var displayName: String { self == .browsers ? "Browsers Only" : "All Apps" }
+}
+
+// MARK: - Ads in browsers
+
+extension RuleGroup {
+    /// The user's own ad decisions: block what the lists miss, allow what they break. One group
+    /// with the same identifier on every Mac, so it syncs as one.
+    public static let adDomainsID = UUID(uuidString: "AD0D0A1E-A9C5-4B7E-9F3D-0A1E5D0A1E00")!
+
+    public var isAdDomains: Bool { id == RuleGroup.adDomainsID }
+
+    public static func adDomains() -> RuleGroup {
+        RuleGroup(id: adDomainsID, name: "Ad Domains", summary: "Your own choices about ad and tracking servers.",
+                  catalogID: "argus-ad-domains", appliesTo: .browsers)
+    }
+}
+
+/// How much the "Ads in Browsers" list blocks: one of HaGeZi's lists, applied to browsers only.
+public enum BrowserAdLevel: String, Codable, Sendable, CaseIterable {
+    case off, light, normal, pro
+
+    public var catalogID: String? {
+        switch self {
+        case .off: nil
+        case .light: "hagezi-light"
+        case .normal: "hagezi-multi"
+        case .pro: "hagezi-pro"
+        }
+    }
+
+    public init?(catalogID: String?) {
+        guard let level = BrowserAdLevel.allCases.first(where: { $0.catalogID != nil && $0.catalogID == catalogID }) else { return nil }
+        self = level
+    }
+
+    public var displayName: String {
+        switch self {
+        case .off: "Off"
+        case .light: "Light"
+        case .normal: "Normal"
+        case .pro: "Pro"
+        }
+    }
+
+    public var explanation: String {
+        switch self {
+        case .off: "Browsers get no ad list. Your Ad Domains and rules still apply."
+        case .light: "Blocks the common ad and tracking servers with almost no risk of breaking sites. A good start."
+        case .normal: "Blocks more ads, trackers and metrics. Rarely breaks a site."
+        case .pro: "Blocks the most. Expect to let something through now and then (Page Check in Troubleshoot helps)."
+        }
+    }
+
+    public var catalogEntry: CatalogEntry? { BlocklistCatalog.entry(id: catalogID) }
+}
+
+extension FirewallState {
+    /// The list behind "Ads in Browsers": a HaGeZi list applied to browsers only.
+    public var browserAdGroup: RuleGroup? {
+        ruleGroups.first { $0.isBrowsersOnly && $0.url != nil && BrowserAdLevel(catalogID: $0.catalogID) != nil }
+    }
+
+    public var browserAdLevel: BrowserAdLevel {
+        guard let group = browserAdGroup, group.isEnabled else { return .off }
+        return BrowserAdLevel(catalogID: group.catalogID) ?? .off
+    }
+
+    public var adDomains: RuleGroup? { ruleGroup(id: RuleGroup.adDomainsID) }
+
+    /// The browser list as it should be saved to switch to `level`; nil when nothing changes.
+    /// It's one list, re-pointed at another of HaGeZi's, so a switch is one change.
+    public func browserAdGroup(switchingTo level: BrowserAdLevel) -> RuleGroup? {
+        let existing = browserAdGroup
+        guard let entry = level.catalogEntry else {
+            guard var group = existing, group.isEnabled else { return nil }
+            group.isEnabled = false
+            return group
+        }
+        var group = existing ?? RuleGroup(name: "", url: entry.url, catalogID: entry.id, format: entry.format, appliesTo: .browsers)
+        if group.isEnabled, group.catalogID == entry.id, !group.name.isEmpty { return nil }
+        group.isEnabled = true
+        if group.catalogID != entry.id || group.name.isEmpty {
+            group.name = "\(entry.displayName) for Browsers"
+            group.summary = entry.summary
+            group.url = entry.url
+            group.catalogID = entry.id
+            group.format = entry.format
+        }
+        return group
     }
 }
 

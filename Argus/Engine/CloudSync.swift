@@ -65,6 +65,17 @@ final class CloudSync {
         var catalogID: String?
         var isEnabled: Bool
         var format: BlocklistFormat
+        /// Always set by this version (nil only from older ones, which don't know about scopes),
+        /// so an older Mac's upload never turns a browsers-only list into one for every app.
+        var appliesTo: AppScope?
+    }
+
+    /// Ad Domains, the user's own list, which nothing downloads: it travels whole, newest wins.
+    struct SyncedAdDomains: Codable, Equatable {
+        var isEnabled: Bool
+        var appliesTo: AppScope?
+        var rules: [Rule]
+        var modifiedAt: Date
     }
 
     struct Payload: Codable {
@@ -73,6 +84,8 @@ final class CloudSync {
         var rules: [Rule]
         var profiles: [Profile]
         var groups: [SyncedGroup]
+        /// Older versions don't send it (and ignore it).
+        var adDomains: SyncedAdDomains?
         /// Deletions, so another Mac removes them too instead of syncing them back.
         var deleted: [UUID: Date]
 
@@ -84,6 +97,8 @@ final class CloudSync {
             return normalized(rules) == normalized(other.rules)
                 && profiles.sorted { $0.id.uuidString < $1.id.uuidString } == other.profiles.sorted { $0.id.uuidString < $1.id.uuidString }
                 && groups.sorted { $0.id.uuidString < $1.id.uuidString } == other.groups.sorted { $0.id.uuidString < $1.id.uuidString }
+                && adDomains.map { ($0.isEnabled, $0.appliesTo, normalized($0.rules)) } ?? (false, nil, [])
+                    == other.adDomains.map { ($0.isEnabled, $0.appliesTo, normalized($0.rules)) } ?? (false, nil, [])
                 && Set(deleted.keys) == Set(other.deleted.keys)
         }
     }
@@ -140,7 +155,8 @@ final class CloudSync {
     }
 
     private func localIDs(_ state: FirewallState) -> Set<UUID> {
-        Set(state.rules.filter(CloudSync.syncable).map(\.id) + state.profiles.map(\.id) + state.ruleGroups.filter { $0.url != nil }.map(\.id))
+        Set(state.rules.filter(CloudSync.syncable).map(\.id) + state.profiles.map(\.id)
+            + state.ruleGroups.filter { $0.url != nil || $0.isAdDomains }.map(\.id))
     }
 
     /// The engine whose configuration is being synced, so a different engine's items aren't taken
@@ -177,7 +193,11 @@ final class CloudSync {
             profiles: state.profiles,
             groups: state.ruleGroups.compactMap { group in
                 group.url.map { SyncedGroup(id: group.id, name: group.name, summary: group.summary, url: $0, catalogID: group.catalogID,
-                                            isEnabled: group.isEnabled, format: group.format) }
+                                            isEnabled: group.isEnabled, format: group.format, appliesTo: group.appliesTo ?? .allApps) }
+            },
+            adDomains: state.adDomains.map { group in
+                SyncedAdDomains(isEnabled: group.isEnabled, appliesTo: group.appliesTo ?? .allApps, rules: group.rules,
+                                modifiedAt: group.modifiedAt ?? .distantPast)
             },
             deleted: deleted)
         setBaseline(present)
@@ -227,19 +247,41 @@ final class CloudSync {
             !deletedHere.contains(profile.id) && state.profile(id: profile.id) != profile && remote.device != deviceID
         }
         let profilesToDelete = state.profiles.filter { remote.deleted[$0.id] != nil }.map(\.id)
-        let groupsToSave: [RuleGroup] = remote.groups.compactMap { synced in
+        var groupsToSave: [RuleGroup] = remote.groups.compactMap { synced in
             guard !deletedHere.contains(synced.id) else { return nil }
             if var mine = state.ruleGroup(id: synced.id) {
-                guard mine.isEnabled != synced.isEnabled || mine.name != synced.name, remote.device != deviceID else { return nil }
+                // Switching "Ads in Browsers" to another level changes the list's address.
+                let scopeChanged = synced.appliesTo.map { $0 != (mine.appliesTo ?? .allApps) } ?? false
+                guard mine.isEnabled != synced.isEnabled || mine.name != synced.name || mine.url != synced.url || scopeChanged,
+                      remote.device != deviceID else { return nil }
                 mine.isEnabled = synced.isEnabled
                 mine.name = synced.name
+                if mine.url != synced.url {
+                    mine.url = synced.url
+                    mine.catalogID = synced.catalogID
+                    mine.summary = synced.summary
+                    mine.format = synced.format
+                }
+                if let scope = synced.appliesTo { mine.appliesTo = scope }
                 return mine
             }
-            guard !state.ruleGroups.contains(where: { $0.url == synced.url }) else { return nil }
+            let scope = synced.appliesTo ?? .allApps
+            guard !state.ruleGroups.contains(where: { $0.url == synced.url && ($0.appliesTo ?? .allApps) == scope }) else { return nil }
             var group = RuleGroup(id: synced.id, name: synced.name, summary: synced.summary, url: synced.url,
-                                  catalogID: synced.catalogID, isEnabled: synced.isEnabled, format: synced.format)
+                                  catalogID: synced.catalogID, isEnabled: synced.isEnabled, format: synced.format, appliesTo: synced.appliesTo)
             group.lastAttempt = nil
             return group
+        }
+        if let theirs = remote.adDomains, remote.device != deviceID, !deletedHere.contains(RuleGroup.adDomainsID) {
+            let mine = state.adDomains
+            if theirs.modifiedAt > (mine?.modifiedAt ?? .distantPast) {
+                var group = mine ?? RuleGroup.adDomains()
+                group.isEnabled = theirs.isEnabled
+                group.appliesTo = theirs.appliesTo ?? group.appliesTo
+                group.rules = theirs.rules
+                group.modifiedAt = theirs.modifiedAt
+                groupsToSave.append(group)
+            }
         }
         let groupsToDelete = state.ruleGroups.filter { remote.deleted[$0.id] != nil }.map(\.id)
         let removals = rulesToDelete.count + profilesToDelete.count + groupsToDelete.count

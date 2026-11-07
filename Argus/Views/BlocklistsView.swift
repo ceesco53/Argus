@@ -52,6 +52,9 @@ struct BlocklistsView: View {
                 Text("Lists of ad, tracking and malware servers, maintained by volunteers and refreshed automatically. Any app's connection to a listed server is denied, unless you've made a rule that allows that app.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Button("Blocking ads in Safari or Chrome? Ads in Browsers blocks them in browsers only.") { model.section = .ads }
+                    .buttonStyle(.link)
+                    .font(.callout)
             }
         }
     }
@@ -105,9 +108,13 @@ private struct GroupRow: View {
                 .foregroundStyle(group.isEnabled ? Color.accentColor : .secondary)
                 .frame(width: 30)
             VStack(alignment: .leading, spacing: 2) {
-                Text(group.name).fontWeight(.medium)
                 HStack(spacing: 6) {
-                    Text(group.entryCount > 0 ? "\(group.entryCount.formatted()) entries" : "Not downloaded yet")
+                    Text(group.name).fontWeight(.medium)
+                    if group.isBrowsersOnly { Pill(text: "Browsers only", symbol: "safari", tint: .secondary) }
+                }
+                HStack(spacing: 6) {
+                    Text(group.isAdDomains ? "\(group.rules.count) of your choices"
+                         : group.entryCount > 0 ? "\(group.entryCount.formatted()) entries" : "Not downloaded yet")
                     if !group.rules.isEmpty { Text("· \(group.rules.count) rules") }
                     if let updated = group.lastUpdated { Text("· updated \(updated.relative)") }
                 }
@@ -131,11 +138,18 @@ private struct GroupRow: View {
                         NSPasteboard.general.setString(url.absoluteString, forType: .string)
                     }
                 }
-                if !group.rules.isEmpty {
+                if group.isAdDomains || group.id == model.state.browserAdGroup?.id {
+                    Button("Open Ads in Browsers") { model.section = .ads }
+                } else if !group.rules.isEmpty {
                     Button("Show Rules") {
                         model.ruleSearch = ""
                         model.section = .rules
                     }
+                }
+                Button(group.isBrowsersOnly ? "Apply to All Apps" : "Apply to Browsers Only") {
+                    var updated = group
+                    updated.appliesTo = group.isBrowsersOnly ? .allApps : .browsers
+                    Task { await model.save(updated) }
                 }
                 Divider()
                 Button("Remove", role: .destructive) { Task { await model.deleteGroup(group.id) } }
@@ -162,7 +176,8 @@ private struct CatalogCard: View {
     let entry: CatalogEntry
 
     var body: some View {
-        let subscribed = model.state.ruleGroups.first { $0.catalogID == entry.id || $0.url == entry.url }
+        // A list for browsers only (Ads in Browsers) doesn't count: this card adds it for every app.
+        let subscribed = model.state.ruleGroups.first { !$0.isBrowsersOnly && ($0.catalogID == entry.id || $0.url == entry.url) }
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 1) {

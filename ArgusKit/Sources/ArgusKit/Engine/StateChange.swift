@@ -83,10 +83,14 @@ extension RuleGroup {
         var isEnabled: Bool
         var format: BlocklistFormat
         var updateInterval: TimeInterval
+        var appliesTo: AppScope?
+        /// A group's own rules are the user's when nothing downloads them (Ad Domains).
+        var ownRules: [Rule]?
     }
 
     var configuration: Configuration {
-        Configuration(name: name, url: url, isEnabled: isEnabled, format: format, updateInterval: updateInterval)
+        Configuration(name: name, url: url, isEnabled: isEnabled, format: format, updateInterval: updateInterval,
+                      appliesTo: appliesTo, ownRules: url == nil ? rules : nil)
     }
 }
 

@@ -77,6 +77,8 @@ public enum ArgusRequest: Codable, Sendable {
     case saveRules([Rule])
     case deleteRules([UUID])
     case setRulesEnabled([UUID], Bool)
+    /// Saves some rules and deletes others as one change, described in Recent Changes by `summary`.
+    case changeRules(save: [Rule], delete: [UUID], summary: String)
 
     case saveProfile(Profile)
     case deleteProfile(UUID)
@@ -87,6 +89,11 @@ public enum ArgusRequest: Codable, Sendable {
 
     case saveRuleGroup(RuleGroup)
     case deleteRuleGroup(UUID)
+    /// Blocks, allows or (nil) hands back to the lists servers in Ad Domains, creating it if
+    /// needed, and deletes rules the decisions replace, as one change.
+    case decideAdDomains([AdDomainDecision], removingRules: [UUID])
+    /// What kind of servers these are (advertising, anti-adblock, threat), from the lists Argus knows.
+    case classifyHosts([String])
     case refreshRuleGroups([UUID]?)
     /// Adds a rule group from a local file's contents.
     case importRuleGroup(name: String, contents: Data, format: BlocklistFormat)
@@ -109,8 +116,8 @@ public enum ArgusRequest: Codable, Sendable {
     /// Configuration changes the user makes, recorded in Recent Changes so they can be undone.
     public var isJournaled: Bool {
         switch self {
-        case .saveRule, .saveRules, .deleteRules, .setRulesEnabled, .saveProfile, .deleteProfile, .activateProfile, .assignNetwork,
-             .saveRuleGroup, .deleteRuleGroup, .importRuleGroup, .resolveAlert, .updateSettings, .setMode, .setProtection,
+        case .saveRule, .saveRules, .deleteRules, .setRulesEnabled, .changeRules, .saveProfile, .deleteProfile, .activateProfile, .assignNetwork,
+             .saveRuleGroup, .deleteRuleGroup, .decideAdDomains, .importRuleGroup, .resolveAlert, .updateSettings, .setMode, .setProtection,
              .pauseProtection, .setLearning, .importBackup, .undoChange:
             true
         default:
@@ -122,7 +129,7 @@ public enum ArgusRequest: Codable, Sendable {
     public var isMutating: Bool {
         switch self {
         case .hello, .getState, .getActivity, .getTraffic, .pendingAlerts, .alertShown, .listCaptures, .fetchCapture, .exportBackup, .reportNetwork,
-             .setBusy, .testConnection, .recentChanges, .digest:
+             .setBusy, .testConnection, .recentChanges, .digest, .classifyHosts:
             false
         default:
             true
@@ -165,6 +172,7 @@ public enum ArgusResponse: Codable, Sendable {
     case test(ConnectionTestResult)
     case changes([ChangeRecord])
     case digest(Digest)
+    case hostInfo([HostInfo])
 }
 
 /// Pushed from the engine to connected clients.

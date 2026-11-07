@@ -65,6 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let name = UserDefaults.standard.string(forKey: "ArgusDebugTroubleshoot") {
                 try? await Task.sleep(for: .milliseconds(800))
                 model.troubleshootAppPath = model.processes.values.first { $0.identity.name == name }?.id
+                if let check = UserDefaults.standard.string(forKey: "ArgusDebugPageCheck") {
+                    model.showSamplePageCheck(searching: check == "search")
+                }
             }
             if let size = DebugLaunch.windowSize {
                 try? await Task.sleep(for: .milliseconds(600))

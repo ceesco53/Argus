@@ -6,7 +6,12 @@ public extension VerdictReason {
         switch self {
         case .rule(let id):
             if let rule = state.rules.first(where: { $0.id == id }) { return "Rule: \(rule.summary)" }
-            if let group = state.ruleGroups.first(where: { $0.rules.contains { $0.id == id } }) { return "Rule from “\(group.name)”" }
+            if let group = state.ruleGroups.first(where: { $0.rules.contains { $0.id == id } }) {
+                if group.isAdDomains, let rule = group.rules.first(where: { $0.id == id }) {
+                    return "Ad Domains: \(rule.action == .deny ? "blocked" : "allowed") \(rule.remote.displayString)"
+                }
+                return "Rule from “\(group.name)”"
+            }
             return "A rule that has since been removed"
         case .blocklist(let id):
             return "Blocklist: \(state.ruleGroup(id: id)?.name ?? "removed list")"

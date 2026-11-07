@@ -55,10 +55,19 @@ change can be undone.
 
 ## Blocklists, one click away
 
-Subscribe to the community's ad, tracker and malware lists from a built-in catalog, or any list by URL.
-They refresh themselves, and never touch your own network.
+Subscribe to the community's ad, tracker and malware lists from a built-in catalog, or any list by URL,
+for every app or for browsers only. They refresh themselves, and never touch your own network.
 
 ![Subscribed and recommended community blocklists](docs/images/blocklists.png)
+
+## Fewer ads in your browsers
+
+Choose how much to block in Safari, Chrome and other browsers, without touching your other apps. Then
+block what the list misses and allow what it breaks, from every ad and tracking server your browsers
+actually reached and what Argus did about each one. Anti-adblock servers, the reason a site says
+"please allow ads", are flagged, and rules you made for one browser move here in a click.
+
+![Ads in Browsers: how much to block, and your own choices about the ad domains your browsers reached](docs/images/ads.png)
 
 ## Profiles that follow you
 
@@ -70,11 +79,15 @@ one of its networks.
 ## Something not working?
 
 Pick the app that's misbehaving: Argus shows what it blocked and why, and lets it through in one click.
+A site that won't load, or says you're blocking ads? Check the page: Argus reloads it and lists
+everything it connects to and what blocked each server. Let anything through for 15 minutes and keep
+what works, or let Argus find the server the page needs.
+
+![Checking a page in Safari: six servers blocked, each with the list or rule that blocked it, and an anti-adblock server flagged](docs/images/page-check.png)
+
 Search anything, and Argus tells you straight away whether it's being blocked.
 
-![Troubleshoot, showing what Argus blocked for Safari](docs/images/troubleshoot.png)
-
-![A search for doubleclick, summarised as blocked by a rule](docs/images/search.png)
+![A search for doubleclick, summarised as blocked by the browsers' ad list](docs/images/search.png)
 
 ## Security that watches the watchers
 
@@ -99,7 +112,8 @@ review screen. Every week, a short report shows what was blocked and what's new.
 <img src="docs/images/menu-bar.png" width="340" align="right" alt="The Argus menu bar window">
 
 Live traffic, what was just blocked (allow it in one click), what's active right now, and the mode, all
-from the menu bar. Pause protection for a few minutes from here, Control Center or Shortcuts.
+from the menu bar. Check the page you're on, or pause protection for a few minutes from here, Control
+Center or Shortcuts.
 
 And there's more:
 

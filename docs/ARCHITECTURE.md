@@ -40,6 +40,7 @@ Each alert carries a suggestion built from independent signals, shown with its r
 | Apple services / shared CDNs | Allow | Moderate / weak |
 | Your rules for the same domain, and your earlier answers | Either | Moderate / weak |
 | Unsigned or broken signature, incoming from the internet | Deny | Weak / moderate |
+| An anti-adblock service (blocking it makes sites refuse to load) | Allow; other deny signals become information | Weak |
 
 Reference lists are downloaded daily by the engine and never block anything themselves: a host on a
 list you've *enabled* is blocked before anyone is asked, so only lists you haven't enabled can advise.
@@ -54,3 +55,18 @@ priority rules › rules for a specific program › the narrower server (host or
 like "deny any program" rules, so allowing a specific app always overrides a list, and an allow rule
 exactly as narrow as a list entry wins over it. IP lists never apply to local-network addresses (some,
 like FireHOL, list the private ranges, which would otherwise cut a Mac off from its own router and DNS).
+
+Lists and rule groups can apply to browsers only (Ads in Browsers, and Ad Domains by default): a
+connection counts as a browser's when the app it's filed under is a known browser. Ad Domains is a
+local rule group of the user's own blocks and allows; its allows are exceptions to every list, so
+allowing `doubleclick.net` also beats a list's deeper `ad.doubleclick.net` entry. A rule for the
+browser itself still outranks Ad Domains.
+
+## Which app a connection belongs to
+
+Connections made by a helper are filed under the app it works for, with the helper shown as "via":
+WebKit's networking process for Safari, Mail and other apps that show web pages, and any helper inside
+an app's own bundle (Chrome's network service, an Electron app's helpers) while macOS holds that app
+responsible for it. A login item that runs by itself keeps its own name. Rules written for a helper
+still apply to its connections, so nothing changes until the helper moves, which Chrome's do with
+every update; rules for the app don't.

@@ -60,6 +60,7 @@ public struct ConnectionAdvice: Codable, Hashable, Sendable {
         public enum Kind: String, Codable, Sendable {
             case threatList, trackerList, trackerService, firstParty, appleService, sharedInfrastructure
             case yourRules, yourHistory, otherApps, signature, incoming, localNetwork
+            case antiAdblock
         }
 
         public var kind: Kind

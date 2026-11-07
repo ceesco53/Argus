@@ -30,6 +30,7 @@ struct MainWindow: View {
                 }
                 Section("Control") {
                     row(.rules)
+                    row(.ads)
                     row(.blocklists)
                     row(.profiles)
                 }
@@ -50,6 +51,7 @@ struct MainWindow: View {
                 case .monitor: MonitorView()
                 case .map: ConnectionsMapView()
                 case .rules: RulesView()
+                case .ads: AdsView()
                 case .blocklists: BlocklistsView()
                 case .profiles: ProfilesView()
                 case .security: SecurityView()

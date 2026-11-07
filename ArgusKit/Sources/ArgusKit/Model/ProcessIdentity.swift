@@ -92,4 +92,20 @@ extension ProcessIdentity {
     public var isWebKitNetworking: Bool {
         bundleIdentifier == "com.apple.WebKit.Networking" || (path as NSString).lastPathComponent == "com.apple.WebKit.Networking"
     }
+
+    /// A program shipped inside an app's bundle that isn't the app itself: a browser's network
+    /// service, an Electron app's helpers, an XPC service. Chrome's
+    /// `…/Google Chrome.app/Contents/Frameworks/…/Helpers/Google Chrome Helper.app/…` is one;
+    /// `…/Google Chrome.app/Contents/MacOS/Google Chrome` isn't.
+    public var isBundledHelper: Bool { ProcessIdentity.isBundledHelper(path) }
+
+    public static func isBundledHelper(_ path: String) -> Bool {
+        guard let app = outermostAppBundle(for: path), path.hasPrefix(app + "/") else { return false }
+        return innermostAppBundle(for: path) != app || !path.hasPrefix(app + "/Contents/MacOS/")
+    }
+
+    /// Whether this is the app at `bundlePath` itself, rather than something inside it.
+    public func isMainProgram(ofApp bundlePath: String) -> Bool {
+        path.hasPrefix(bundlePath + "/Contents/MacOS/") && ProcessIdentity.innermostAppBundle(for: path) == bundlePath
+    }
 }

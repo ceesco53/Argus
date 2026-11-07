@@ -36,6 +36,10 @@ final class DemoEngine: @unchecked Sendable {
         static let scorecard = UUID(uuidString: "D0000000-0000-0000-0000-000000000019")!
         static let dns = UUID(uuidString: "D0000000-0000-0000-0000-00000000001A")!
         static let time = UUID(uuidString: "D0000000-0000-0000-0000-00000000001B")!
+        static let safariAntiAdblock = UUID(uuidString: "D0000000-0000-0000-0000-00000000001C")!
+        static let adOutbrain = UUID(uuidString: "D0000000-0000-0000-0000-00000000001D")!
+        static let adVideo = UUID(uuidString: "D0000000-0000-0000-0000-00000000001E")!
+        static let adTaboola = UUID(uuidString: "D0000000-0000-0000-0000-00000000001F")!
         static let home = UUID(uuidString: "D0000000-0000-0000-0000-000000000020")!
         static let office = UUID(uuidString: "D0000000-0000-0000-0000-000000000021")!
         static let cafe = UUID(uuidString: "D0000000-0000-0000-0000-000000000022")!
@@ -76,7 +80,17 @@ final class DemoEngine: @unchecked Sendable {
         Server(host: "ib.adnxs.com", address: "185.89.210.180"),
         Server(host: "connect.facebook.net", address: "157.240.22.19"),
         Server(host: "bat.bing.com", address: "13.107.21.200"),
+        // Blocked by the user's own choice in Ad Domains.
+        Server(host: "widgets.outbrain.com", address: "151.101.2.2"),
+        // An anti-adblock service, blocked by an old Safari rule: the reason a site says "please allow ads".
+        Server(host: "html-load.com", address: "172.67.70.211"),
+        // No list blocks it: an ad that got through.
+        Server(host: "gum.criteo.com", address: "178.250.1.11"),
+        // Allowed in Ad Domains, because a video player needs it.
+        Server(host: "imasdk.googleapis.com", address: "142.250.72.106"),
     ]
+    /// The page a page check shows (`-ArgusDebugPageCheck`), loaded by Safari just before launch.
+    static let pageCheckSite = "www.example-news.com"
 
     init() {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ArgusDemo-\(UUID().uuidString)", isDirectory: true)
@@ -229,6 +243,7 @@ final class DemoEngine: @unchecked Sendable {
             Rule(id: ID.scorecard, action: .deny, remote: .domain("scorecardresearch.com"), isPriority: true,
                  notes: "Tracker. Priority, so no app rule can let it through.", origin: .user),
             Rule(action: .deny, remote: .localNetwork, profileID: ID.cafe, notes: "Keep strangers' devices away on café Wi-Fi.", origin: .user),
+            Rule(id: ID.safariAntiAdblock, action: .deny, process: path("Safari"), remote: .host("html-load.com"), origin: .alert),
         ]
         if apps.contains(where: { $0.identity.name == "Xcode" }) {
             rules.append(Rule(id: ID.xcode, action: .allow, process: path("Xcode"), codeRequirement: requirement("Xcode"), remote: .domain("apple.com"), origin: .alert))
@@ -249,10 +264,22 @@ final class DemoEngine: @unchecked Sendable {
             group.addressCount = addresses
             return group
         }
+        // Ads in Browsers at Light, with a few choices of the user's own on top.
+        var browserList = group(ID.blocklist, catalog: "hagezi-light", enabled: true, domains: 98_412)
+        browserList.name = "HaGeZi Multi Light for Browsers"
+        browserList.appliesTo = .browsers
+        var adDomains = RuleGroup.adDomains()
+        adDomains.rules = [
+            Rule(id: ID.adOutbrain, action: .deny, remote: .domain("outbrain.com"), origin: .ruleGroup(adDomains.id), createdAt: now.addingTimeInterval(-5 * 86_400)),
+            Rule(id: ID.adTaboola, action: .deny, remote: .domain("taboola.com"), origin: .ruleGroup(adDomains.id), createdAt: now.addingTimeInterval(-5 * 86_400)),
+            Rule(id: ID.adVideo, action: .allow, remote: .host("imasdk.googleapis.com"), origin: .ruleGroup(adDomains.id), createdAt: now.addingTimeInterval(-3 * 86_400)),
+        ]
+        adDomains.modifiedAt = now.addingTimeInterval(-3 * 86_400)
         state.ruleGroups = [
-            group(ID.blocklist, catalog: "hagezi-light", enabled: true, domains: 98_412),
+            browserList,
             group(ID.hosts, catalog: "stevenblack", enabled: true, domains: 79_215),
             group(ID.firehol, catalog: "firehol-level1", enabled: false, domains: 0, addresses: 4_510),
+            adDomains,
         ]
         return state
     }
@@ -279,16 +306,41 @@ final class DemoEngine: @unchecked Sendable {
         let app = present.first { roll -= $0.weight; return roll < 0 } ?? present[0]
         if app.isBrowser, Double.random(in: 0..<1, using: &random) < 0.16 {
             let tracker = trackers.randomElement(using: &random)!
-            let reason: VerdictReason = if tracker.host?.contains("scorecardresearch") == true {
-                .rule(ID.scorecard)
-            } else if app.identity.name == "Google Chrome", tracker.host?.contains("doubleclick") == true {
-                .rule(ID.chromeAds)
-            } else {
-                .blocklist(Double.random(in: 0..<1, using: &random) < 0.7 ? ID.blocklist : ID.hosts)
-            }
-            return (app, tracker, Verdict(.deny, reason))
+            // The anti-adblock story is Safari's: an old rule blocks it there.
+            if tracker.host == "html-load.com", app.identity.name != "Safari" { return (app, app.servers[0], app.verdict) }
+            return (app, tracker, verdict(app, tracker.host ?? ""))
         }
         return (app, app.servers.randomElement(using: &random)!, app.verdict)
+    }
+
+    /// What Argus decides about a browser reaching an ad or tracking server.
+    private func verdict(_ app: App, _ host: String) -> Verdict {
+        let isSafari = app.identity.name == "Safari"
+        if host.contains("scorecardresearch") { return Verdict(.deny, .rule(ID.scorecard)) }
+        if host.contains("outbrain") { return Verdict(.deny, .rule(ID.adOutbrain)) }
+        if host.contains("imasdk") { return Verdict(.allow, .rule(ID.adVideo)) }
+        if host.contains("criteo") { return app.verdict }
+        if host == "html-load.com" { return Verdict(.deny, .rule(ID.safariAntiAdblock)) }
+        if !isSafari, host.contains("doubleclick") { return Verdict(.deny, .rule(ID.chromeAds)) }
+        return Verdict(.deny, .blocklist(Double.random(in: 0..<1, using: &random) < 0.7 ? ID.blocklist : ID.hosts))
+    }
+
+    /// Safari loading a news page a minute ago: the site, its CDN, and the ads and trackers on it.
+    private func loadPage(at time: Date) {
+        guard let safari = apps.first(where: { $0.identity.name == "Safari" }) else { return }
+        let site = DemoEngine.pageCheckSite
+        let page: [(String, String)] = [
+            (site, "93.184.216.40"), ("cdn.example-news.com", "93.184.216.41"), ("fonts.gstatic.com", "142.250.72.99"),
+            ("html-load.com", "172.67.70.211"), ("securepubads.g.doubleclick.net", "142.250.72.98"),
+            ("imasdk.googleapis.com", "142.250.72.106"), ("www.google-analytics.com", "142.250.72.78"),
+            ("widgets.outbrain.com", "151.101.2.2"), ("gum.criteo.com", "178.250.1.11"), ("ib.adnxs.com", "185.89.210.180"),
+            ("sb.scorecardresearch.com", "18.239.18.25"), ("html-load.com", "172.67.70.211"), ("cdn.example-news.com", "93.184.216.41"),
+        ]
+        for (index, (host, address)) in page.enumerated() {
+            let server = Server(host: host, address: address)
+            let verdict = host.hasSuffix("example-news.com") || host.hasSuffix("gstatic.com") ? safari.verdict : verdict(safari, host)
+            record((safari, server, verdict), at: time.addingTimeInterval(Double(index) * 0.2))
+        }
     }
 
     private func seed(now: Date) {
@@ -329,6 +381,7 @@ final class DemoEngine: @unchecked Sendable {
             carry(seconds: 1, at: time, curve: dayCurve(time), live: true)
             time = time.addingTimeInterval(1)
         }
+        loadPage(at: now.addingTimeInterval(-60))
 
         func event(_ kind: ActivityEvent.Kind, _ title: String, _ detail: String, hoursAgo: Double, path: String? = nil) {
             _ = activity.addEvent(kind, title: title, detail: detail, processPath: path, now: now.addingTimeInterval(-hoursAgo * 3600))

@@ -34,6 +34,20 @@ struct MenuBarView: View {
             if let network = model.networkPrompt { NetworkPromptView(network: network, compact: true) }
             if !model.recentlyBlocked.isEmpty { recentlyBlocked }
             activeApps
+            if let browser = frontBrowser {
+                Button {
+                    model.section = .troubleshoot
+                    openMain()
+                    // The demo's Safari is made up: check it, not whatever is really in front.
+                    let demoSafari = DebugLaunch.demo ? model.processes.values.first { $0.identity.bundleIdentifier == "com.apple.Safari" }?.id : nil
+                    Task { await model.startPageCheck(appPath: demoSafari) }
+                } label: {
+                    Label("Check This Page in \(browser)", systemImage: "doc.text.magnifyingglass")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.bordered)
+                .help("See everything the page connects to, what Argus blocked and why")
+            }
             Button {
                 model.troubleshoot(appPath: nil)
             } label: {
@@ -95,6 +109,14 @@ struct MenuBarView: View {
                 BlockedRow(entry: entry, model: model, iconSize: 18)
             }
         }
+    }
+
+    /// The browser the user was just using, by name.
+    private var frontBrowser: String? {
+        if DebugLaunch.demo { return "Safari" } // like the troubleshoot button, not whatever is really in front
+        guard let app = model.busy.foregroundApp,
+              Browsers.browser(bundleIdentifier: app.bundleIdentifier) != nil else { return nil }
+        return app.localizedName
     }
 
     private var troubleshootTitle: String {

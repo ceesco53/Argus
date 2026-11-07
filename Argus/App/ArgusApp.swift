@@ -51,8 +51,12 @@ struct ArgusCommands: Commands {
         }
         CommandGroup(after: .sidebar) {
             ForEach(Array(SidebarItem.allCases.enumerated()), id: \.element) { index, item in
-                Button(item.title) { model.section = item }
-                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                if index < 9 {
+                    Button(item.title) { model.section = item }
+                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                } else {
+                    Button(item.title) { model.section = item }
+                }
             }
         }
         CommandGroup(after: .appInfo) {

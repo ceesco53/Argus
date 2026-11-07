@@ -6,7 +6,8 @@ import UserNotifications
 import WidgetKit
 
 enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
-    case overview, monitor, map, rules, blocklists, profiles, security, capture, troubleshoot
+    // New sections go last: their order numbers the ⌘1–⌘9 shortcuts (the sidebar orders itself).
+    case overview, monitor, map, rules, blocklists, profiles, security, capture, troubleshoot, ads
 
     var id: String { rawValue }
 
@@ -16,6 +17,7 @@ enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
         case .monitor: "Network Monitor"
         case .map: "World Map"
         case .rules: "Rules"
+        case .ads: "Ads in Browsers"
         case .blocklists: "Blocklists"
         case .profiles: "Profiles"
         case .security: "Security"
@@ -30,6 +32,7 @@ enum SidebarItem: String, Hashable, CaseIterable, Identifiable {
         case .monitor: "waveform.path.ecg"
         case .map: "globe.europe.africa"
         case .rules: "list.bullet.rectangle"
+        case .ads: "rectangle.badge.xmark"
         case .blocklists: "shield.lefthalf.filled"
         case .profiles: "person.2.crop.square.stack"
         case .security: "checkmark.seal"
@@ -89,7 +92,7 @@ final class AppModel {
     var networkPrompt: NetworkIdentity?
     var errorMessage: String?
     private(set) var isUnlocked = false
-    private(set) var refreshingGroups: Set<UUID> = []
+    var refreshingGroups: Set<UUID> = []
 
     // Experience
     private(set) var toast: Toast?
@@ -98,6 +101,10 @@ final class AppModel {
     var showDigest = false
     var showChanges = false
     var troubleshootAppPath: String?
+    /// What an app (usually a browser reloading a page) connects to right now; see `PageCheck`.
+    var pageCheck: PageCheck?
+    /// What kind of server each host is (advertising, anti-adblock…), as the engine classified it.
+    var hostInfo: [String: HostInfo] = [:]
     /// Connections Argus decided on its own during the current busy spell.
     private(set) var decidedWhileBusy = 0
 
@@ -132,6 +139,8 @@ final class AppModel {
     @ObservationIgnored private var snoozedNetworks: Set<NetworkIdentity> = []
     @ObservationIgnored private var lastWidgetSnapshot: WidgetSnapshot?
     @ObservationIgnored private var lastWidgetWrite = Date.distantPast
+    /// Apps' own programs by bundle path, read from disk once (see `appProgram(bundle:)`).
+    @ObservationIgnored var installedAppPrograms: [String: ProcessIdentity?] = [:]
 
     // MARK: - Lifecycle
 
@@ -395,6 +404,7 @@ final class AppModel {
             if !snapshot.log.isEmpty {
                 log.append(contentsOf: snapshot.log)
                 if log.count > 1000 { log.removeFirst(log.count - 1000) }
+                recordForPageCheck(snapshot.log)
                 notifyForegroundBlocks(snapshot.log)
                 if busy.isBusy { decidedWhileBusy += snapshot.log.filter { $0.verdict.reason == .deferred }.count }
             }
@@ -465,6 +475,13 @@ final class AppModel {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             return nil
         }
+    }
+
+    /// Asks the engine something in the background: no error messages, nil when it can't answer
+    /// (an older engine that doesn't know the request, say).
+    func ask(_ request: ArgusRequest) async -> ArgusResponse? {
+        guard let client else { return nil }
+        return try? await client.call(request)
     }
 
     /// Performs a change and shows an undo message for it.

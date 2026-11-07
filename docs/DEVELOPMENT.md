@@ -16,10 +16,11 @@ Debug builds accept launch arguments for working on the UI without the filter:
 | Argument | Effect |
 |---|---|
 | `-ArgusDemo YES` | Runs on made-up activity instead of the real filter (see below) |
-| `-ArgusDebugSection monitor` | Opens the main window on that section (`overview`, `monitor`, `map`, `rules`, `blocklists`, `profiles`, `security`, `capture`, `troubleshoot`) |
+| `-ArgusDebugSection monitor` | Opens the main window on that section (`overview`, `monitor`, `map`, `rules`, `ads`, `blocklists`, `profiles`, `security`, `capture`, `troubleshoot`) |
 | `-ArgusDebugSheet digest` | Opens a sheet on top (`review`, `digest`, `changes`) |
 | `-ArgusDebugSearch doubleclick` | Starts the Network Monitor with that search |
 | `-ArgusDebugTroubleshoot Safari` | Starts Troubleshoot with that app picked |
+| `-ArgusDebugPageCheck YES` | With `-ArgusDebugTroubleshoot`, shows a finished page check on that app's activity (`search` shows a culprit search under way) |
 | `-ArgusDebugAlert YES` | Shows sample connection alerts |
 | `-ArgusDebugMenu YES` | Shows the status menu's content in a normal window |
 | `-ArgusDebugWindowSize 1440x900` | Sizes the main window |

@@ -24,6 +24,7 @@ struct TroubleshootView: View {
                 }
                 healthCard
                 appCard
+                PageCheckCard(appPath: model.troubleshootAppPath)
                 testCard
                 if let path = model.troubleshootAppPath { blockedCard(path) }
             }

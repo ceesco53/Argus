@@ -77,18 +77,31 @@ public struct FlowContext: Sendable, Hashable {
         self.direction = direction
     }
 
-    /// WebKit makes the connections of every app that shows web content, from a networking process
-    /// it runs for that app. Files such a connection under the app (Safari, Mail…) with WebKit as
-    /// the helper, so it shows under the app's name and the app's rules apply.
-    public func attributingWebKitTraffic(
+    /// Files a connection made by a helper under the app it works for, with the helper as `via`, so
+    /// it shows under the app's name and the app's rules apply:
+    /// - WebKit makes the connections of every app that shows web content (Safari, Mail…) from a
+    ///   networking process it runs for that app.
+    /// - Browsers and Electron apps make theirs from helpers inside their own bundle. Chrome keeps
+    ///   its helpers in a folder named after its version, so rules written for a helper stop
+    ///   applying with every Chrome update; rules for Chrome itself don't.
+    ///
+    /// A bundled helper only counts as the app's while the app is the one running it (macOS holds
+    /// the app responsible), so a login item that runs on its own keeps its own identity.
+    public func attributingHelperTraffic(
         responsiblePID: (Int32) -> Int32? = ProcessLookup.responsiblePID(for:),
         identity: (Int32) -> ProcessIdentity = { CodeSignature.identity(auditToken: nil, pid: $0) }
     ) -> FlowContext {
-        guard via == nil, process.isWebKitNetworking, let owner = responsiblePID(pid), owner != pid else { return self }
+        guard via == nil else { return self }
+        let isWebKit = process.isWebKitNetworking
+        guard isWebKit || process.isBundledHelper, let owner = responsiblePID(pid), owner != pid else { return self }
+        let app = identity(owner)
+        if !isWebKit {
+            guard let bundle = ProcessIdentity.outermostAppBundle(for: process.path), app.isMainProgram(ofApp: bundle) else { return self }
+        }
         var context = self
         context.via = process
         context.viaIsHelper = true
-        context.process = identity(owner)
+        context.process = app
         context.pid = owner
         context.processStartTime = ProcessLookup.startTime(pid: owner)
         context.auditToken = nil // the token was the helper's; the app is checked by its pid

@@ -30,6 +30,8 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>When you check a page, Argus asks your browser which page is open and reloads it, so it can show everything that page connects to.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Argus — a hundred eyes on your network.</string>
 	<key>NSLocalNetworkUsageDescription</key>

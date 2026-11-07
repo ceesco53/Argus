@@ -34,9 +34,15 @@ usage: argus <command> [options]
   profiles create NAME
   profiles delete NAME
 
+  ads [off|light|normal|pro]      Ads in browsers: show it, or set how much its list blocks
+  ads block|allow|auto DOMAIN [--host]
+                                  Your ad domains: block or allow a domain in browsers (--host:
+                                  that server only), or leave it to the list
+  ads domains on|off              Turn all your ad domain choices on or off
+
   blocklists                      List subscribed blocklists and rule groups
   blocklists catalog              List community blocklists you can add
-  blocklists add URL|CATALOG-ID [--name NAME]
+  blocklists add URL|CATALOG-ID [--name NAME] [--browsers]
   blocklists enable|disable|remove|update ID|NAME
   blocklists import FILE [--name NAME]
 
@@ -383,6 +389,9 @@ func run(_ args: Arguments) async throws {
     case "blocklists", "groups":
         try await blocklists(rest, args, client)
 
+    case "ads":
+        try await ads(rest, args, client)
+
     case "apps":
         let processes = try await client.activity(since: 0).processes.sorted { $0.totalBytes > $1.totalBytes }
         if args.has("json") { return try printJSON(processes) }
@@ -556,9 +565,9 @@ func blocklists(_ rest: [String], _ args: Arguments, _ client: ArgusClient) asyn
     switch sub {
     case "list":
         table(state.ruleGroups.map { g in
-            [short(g.id), g.isEnabled ? "on" : "off", g.name, g.entryCount.formatted(),
-             g.lastUpdated.map { $0.formatted(.relative(presentation: .named)) } ?? "never", g.lastError ?? ""]
-        }, header: ["ID", "ON", "NAME", "ENTRIES", "UPDATED", "PROBLEM"])
+            [short(g.id), g.isEnabled ? "on" : "off", g.name, g.isBrowsersOnly ? "browsers" : "all apps", g.entryCount.formatted(),
+             g.isAdDomains ? "" : g.lastUpdated.map { $0.formatted(.relative(presentation: .named)) } ?? "never", g.lastError ?? ""]
+        }, header: ["ID", "ON", "NAME", "APPLIES TO", "ENTRIES", "UPDATED", "PROBLEM"])
     case "catalog":
         table(BlocklistCatalog.entries.map { e in
             [e.id, e.displayName, "~\(e.approximateEntries.formatted())", e.category.rawValue, e.isRecommended ? "recommended" : ""]
@@ -573,6 +582,7 @@ func blocklists(_ rest: [String], _ args: Arguments, _ client: ArgusClient) asyn
             newGroup = RuleGroup(name: args.option("name") ?? url.lastPathComponent, url: url)
         }
         if let name = args.option("name") { newGroup.name = name }
+        if args.has("browsers") { newGroup.appliesTo = .browsers }
         _ = try await newState(client, .saveRuleGroup(newGroup))
         _ = try await newState(client, .refreshRuleGroups([newGroup.id]))
         let updated = try await client.state().ruleGroup(id: newGroup.id)
@@ -603,6 +613,66 @@ func blocklists(_ rest: [String], _ args: Arguments, _ client: ArgusClient) asyn
         print("Imported \(url.lastPathComponent)")
     default:
         throw CLIError("Unknown blocklists command.")
+    }
+}
+
+func ads(_ rest: [String], _ args: Arguments, _ client: ArgusClient) async throws {
+    let state = try await client.state()
+    let sub = rest.first ?? "show"
+    switch sub {
+    case "show":
+        let level = state.browserAdLevel
+        var line = "List:            \(level.displayName)"
+        if level != .off, let group = state.browserAdGroup {
+            line += " — \(group.name), \(group.entryCount.formatted()) entries"
+            if let error = group.lastError { line += " (problem: \(error))" }
+        }
+        print(line)
+        let domains = state.adDomains
+        let scope = domains?.isBrowsersOnly ?? true ? "browsers" : "all apps"
+        print("Your ad domains: \(domains?.isEnabled ?? true ? "on" : "off"), for \(scope)")
+        let rules = (domains?.rules ?? []).sorted { $0.remote.value < $1.remote.value }
+        guard !rules.isEmpty else {
+            print("\nNo choices yet. Block one with: argus ads block DOMAIN")
+            return
+        }
+        print("")
+        table(rules.map { [$0.action == .deny ? "block" : "allow", $0.remote.displayString] }, header: ["CHOICE", "DOMAIN"])
+    case "off", "light", "normal", "pro":
+        let level = BrowserAdLevel(rawValue: sub)!
+        guard let group = state.browserAdGroup(switchingTo: level) else {
+            print("Ads in Browsers is already \(level.displayName).")
+            return
+        }
+        _ = try await newState(client, .saveRuleGroup(group))
+        guard group.isEnabled else {
+            print("Ads in Browsers is off.")
+            return
+        }
+        let updated = try await newState(client, .refreshRuleGroups([group.id])).ruleGroup(id: group.id)
+        if let error = updated?.lastError { throw CLIError("Switched to \(level.displayName), but downloading failed: \(error)") }
+        print("Ads in Browsers: \(level.displayName) — \(group.name), \((updated?.entryCount ?? 0).formatted()) entries")
+    case "block", "allow", "auto":
+        guard rest.count >= 2 else { throw CLIError("Use: argus ads \(sub) DOMAIN [--host]") }
+        var text = rest[1].lowercased()
+        if let url = URL(string: text), let host = url.host() { text = host }
+        guard let name = DomainSet.normalize(text) else { throw CLIError("“\(rest[1])” isn't a domain.") }
+        let remote: RemoteMatch = args.has("host") ? .host(name) : .domain(name)
+        let action: RuleAction? = sub == "block" ? .deny : sub == "allow" ? .allow : nil
+        _ = try await newState(client, .decideAdDomains([AdDomainDecision(remote, action)], removingRules: []))
+        switch action {
+        case .deny?: print("Blocked \(remote.displayString) in browsers")
+        case .allow?: print("Allowed \(remote.displayString) in browsers")
+        case nil: print("\(remote.displayString) follows the list again")
+        }
+    case "domains":
+        guard rest.count >= 2, ["on", "off"].contains(rest[1]) else { throw CLIError("Use: argus ads domains on|off") }
+        var group = state.adDomains ?? RuleGroup.adDomains()
+        group.isEnabled = rest[1] == "on"
+        _ = try await newState(client, .saveRuleGroup(group))
+        print("Your ad domains are \(rest[1])")
+    default:
+        throw CLIError("Unknown ads command. See `argus help`.")
     }
 }
 

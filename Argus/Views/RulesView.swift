@@ -11,6 +11,8 @@ struct RulesView: View {
     @State private var isNew = false
     @State private var sortOrder = [KeyPathComparator(\RuleRow.processName)]
     @AppStorage("rulesGroupedByProgram") private var groupByProgram = false
+    /// How many helper rules there were when the offer to move them was last dismissed.
+    @AppStorage("helperRuleMoveDismissed") private var helperMoveDismissed = 0
 
     enum Filter: String, CaseIterable, Identifiable {
         case all = "All Rules", allow = "Allow", deny = "Deny", temporary = "Temporary", groups = "From Rule Groups", disabled = "Disabled"
@@ -27,6 +29,11 @@ struct RulesView: View {
         VStack(spacing: 0) {
             if model.engine == .monitor {
                 MonitorModeBanner(compact: true).padding([.horizontal, .top], 16).padding(.bottom, 8)
+            }
+            let move = model.helperRuleMove
+            if !move.isEmpty, move.count > helperMoveDismissed {
+                HelperRulesBanner(move: move) { helperMoveDismissed = move.count }
+                    .padding([.horizontal, .top], 16).padding(.bottom, 8)
             }
             if groupByProgram {
                 groupedList(issues: issues)
@@ -336,5 +343,48 @@ struct RuleRow: Identifiable {
             originName = rule.origin.displayName
         }
         actionName = rule.action.rawValue
+    }
+}
+
+/// Offers to rewrite rules made for apps' helpers (Chrome's network service, say) as rules for the
+/// apps, which keep working when an update moves the helper.
+private struct HelperRulesBanner: View {
+    @Environment(AppModel.self) private var model
+    let move: HelperRuleMove
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "arrow.triangle.merge").font(.title2).foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("\(move.count) rule\(move.count == 1 ? " is" : "s are") for helpers inside \(apps)").font(.headline)
+                Text("Argus counts an app's helpers as the app. A helper can move when its app updates (Chrome's move with every version), and rules written for it stop working. Rules for the app keep working.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !move.duplicates.isEmpty {
+                    Text("\(move.duplicates.count) of them would repeat another rule, so they'll be removed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Button("Move to \(move.apps.count == 1 ? move.apps.keys.first! : "Their Apps")") {
+                        Task { await model.moveHelperRules() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button("Not Now", action: dismiss)
+                }
+                .controlSize(.small)
+            }
+            Spacer(minLength: 0)
+        }
+        .card()
+    }
+
+    /// "Google Chrome", "Google Chrome and Claude", "Google Chrome, Claude and 3 other apps".
+    private var apps: String {
+        let names = move.apps.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.map(\.key)
+        guard names.count > 2 else { return ListFormatter.localizedString(byJoining: names) }
+        return "\(names[0]), \(names[1]) and \(names.count - 2) other app\(names.count == 3 ? "" : "s")"
     }
 }

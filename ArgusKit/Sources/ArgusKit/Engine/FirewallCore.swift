@@ -481,7 +481,8 @@ public final class FirewallCore: @unchecked Sendable {
         inner.compiled = CompiledRuleSet(
             rules: inner.state.rules + groups.flatMap(\.rules),
             activeProfile: inner.state.settings.activeProfileID,
-            blocklists: lists)
+            blocklists: lists,
+            browsersOnly: Set(groups.filter(\.isBrowsersOnly).map(\.id)))
     }
 
     private func scheduleSave() {
@@ -870,6 +871,20 @@ public final class FirewallCore: @unchecked Sendable {
         case .deleteRules(let ids):
             let set = Set(ids)
             return .state(mutate { $0.rules.removeAll { set.contains($0.id) } })
+        case .changeRules(let rules, let ids, _):
+            if rules.contains(where: \.isFromRuleGroup) { throw ArgusError.invalid("Rules from a rule group are managed by its subscription.") }
+            let now = Date()
+            let removing = Set(ids)
+            let newState = mutate { state in
+                state.rules.removeAll { removing.contains($0.id) }
+                for var rule in rules {
+                    rule.modifiedAt = now
+                    if let index = state.rules.firstIndex(where: { $0.id == rule.id }) { state.rules[index] = rule } else { state.rules.append(rule) }
+                }
+            }
+            for rule in rules { if case .untilQuit(let pid, _) = rule.expiration { watchExit(of: pid) } }
+            resolveAlertsCoveredByRules()
+            return .state(newState)
         case .setRulesEnabled(let ids, let enabled):
             let set = Set(ids)
             return .state(mutate { state in
@@ -908,7 +923,15 @@ public final class FirewallCore: @unchecked Sendable {
 
         case .saveRuleGroup(var group):
             let previous = state.ruleGroup(id: group.id)
-            if let previous {
+            if group.isAdDomains {
+                // The user's own list: its contents are the client's (another Mac's, through iCloud).
+                group.url = nil
+                group.normalizeAdDomainRules()
+                let changed = previous.map { $0.rules != group.rules || $0.isEnabled != group.isEnabled || $0.appliesTo != group.appliesTo } ?? true
+                // A copy newer than ours came from another Mac: keep its date so the Macs agree.
+                let newer = (group.modifiedAt ?? .distantPast) > (previous?.modifiedAt ?? .distantPast)
+                if changed, !newer { group.modifiedAt = Date() }
+            } else if let previous {
                 // Contents come from the subscription, not from the client.
                 group.rules = previous.rules
                 group.hostCount = previous.hostCount
@@ -928,6 +951,23 @@ public final class FirewallCore: @unchecked Sendable {
             store.deleteBlocklist(id)
             inner.withLock { _ = $0.blocklists.removeValue(forKey: id) }
             return .state(mutate { $0.ruleGroups.removeAll { $0.id == id } })
+        case .decideAdDomains(let decisions, let removing):
+            let now = Date()
+            let ids = Set(removing)
+            let newState = try mutate { state in
+                var group = state.adDomains ?? RuleGroup.adDomains()
+                try group.apply(decisions, now: now)
+                if let index = state.ruleGroups.firstIndex(where: { $0.id == group.id }) {
+                    state.ruleGroups[index] = group
+                } else {
+                    state.ruleGroups.append(group)
+                }
+                state.rules.removeAll { ids.contains($0.id) }
+            }
+            resolveAlertsCoveredByRules()
+            return .state(newState)
+        case .classifyHosts(let hosts):
+            return .hostInfo(classify(hosts))
         case .refreshRuleGroups(let ids):
             await refreshRuleGroups(ids)
             return .state(state)
@@ -994,7 +1034,11 @@ public final class FirewallCore: @unchecked Sendable {
                         return rule
                     }
                     state.rules += RuleAnalysis.withoutDuplicates(incoming, of: state.rules)
-                    state.ruleGroups += imported.ruleGroups.filter { $0.url.map { !groupURLs.contains($0) } ?? true }
+                    // Ad Domains has the same identifier everywhere: the copy here stays.
+                    let groupIDs = Set(state.ruleGroups.map(\.id))
+                    state.ruleGroups += imported.ruleGroups.filter { group in
+                        !groupIDs.contains(group.id) && (group.url.map { !groupURLs.contains($0) } ?? true)
+                    }
                 } else {
                     let revision = state.revision
                     state = imported
@@ -1063,6 +1107,8 @@ public final class FirewallCore: @unchecked Sendable {
         case .setRulesEnabled(let ids, let enabled):
             let verb = enabled ? "Enabled" : "Disabled"
             return ids.count == 1 ? "\(verb) rule: \(after.rules.first { $0.id == ids[0] }?.summary ?? "")" : "\(verb) \(ids.count) rules"
+        case .changeRules(_, _, let summary):
+            return summary
         case .resolveAlert:
             guard let rule = change.addedRules.first else { return "Answered an alert" }
             return "\(rule.action == .allow ? "Allowed" : "Denied") from an alert: \(rule.summary)"
@@ -1080,6 +1126,17 @@ public final class FirewallCore: @unchecked Sendable {
             return "Changed blocklist “\(group.name)”"
         case .deleteRuleGroup(let id):
             return "Removed blocklist “\(before.ruleGroup(id: id)?.name ?? "")”"
+        case .decideAdDomains(let decisions, let removing):
+            if decisions.count == 1, removing.isEmpty, let decision = decisions.first {
+                let server = decision.remote.displayString
+                return switch decision.action {
+                case .deny: "Ad Domains: blocked \(server)"
+                case .allow: "Ad Domains: allowed \(server)"
+                case nil: "Ad Domains: \(server) follows the lists again"
+                }
+            }
+            let replaced = removing.isEmpty ? "" : ", replacing \(removing.count) rule\(removing.count == 1 ? "" : "s")"
+            return "Ad Domains: changed \(decisions.count) server\(decisions.count == 1 ? "" : "s")\(replaced)"
         case .importRuleGroup(let name, _, _):
             return "Imported “\(name)”"
         case .setMode(let mode):
@@ -1139,6 +1196,33 @@ public final class FirewallCore: @unchecked Sendable {
         }
         return ConnectionTestResult(verdict: verdict, explanation: explanation, ruleID: verdict?.reason.ruleID,
                                     blocklistName: blocklistName, advice: advice(for: ctx), processName: identity.name)
+    }
+
+    // MARK: - What kind of server
+
+    /// Classifies hosts from the reference lists, the enabled lists and well-known services.
+    public func classify(_ hosts: [String]) -> [HostInfo] {
+        let loaded = references.withLock { $0 }
+        let referenceLists = BlocklistCatalog.references.compactMap { list in loaded[list.id].map { (list, $0) } }
+        let (groups, blocklists) = inner.withLock { inner in (inner.state.ruleGroups.filter(\.isEnabled), inner.blocklists) }
+        let lists = groups.compactMap { group in blocklists[group.id].map { (group, $0) } }
+        return hosts.prefix(20_000).map { raw in
+            let host = raw.lowercased()
+            if let service = AntiAdblock.service(for: host) {
+                return HostInfo(host: raw, category: .antiAdblock, source: service)
+            }
+            for (list, compiled) in referenceLists where compiled.domains.match(host) != nil {
+                return HostInfo(host: raw, category: list.kind == .threat ? .threat : .advertising, source: list.name)
+            }
+            if let service = Advisor.knownTrackingService(host) {
+                return HostInfo(host: raw, category: .advertising, source: service)
+            }
+            for (group, compiled) in lists where compiled.domains.match(host) != nil {
+                let isThreatList = BlocklistCatalog.entry(id: group.catalogID)?.category == .security
+                return HostInfo(host: raw, category: isThreatList ? .threat : .advertising, source: group.name)
+            }
+            return HostInfo(host: raw, category: nil, source: nil)
+        }
     }
 
     private func protectionChanged(_ enabled: Bool) {

@@ -119,6 +119,20 @@ public enum Advisor {
             reasons.append(.init(.localNetwork, leansTo: .allow, strength: .weak, text: "This stays on your local network."))
         }
 
+        // Blocking an anti-adblock service is what makes sites refuse to load, so nothing short of
+        // a threat argues for blocking it: the other signals stay, but only as information.
+        if let host, let service = AntiAdblock.service(for: host) {
+            reasons = reasons.map { reason in
+                guard reason.leansTo == .deny, reason.kind != .threatList else { return reason }
+                var neutral = reason
+                neutral.leansTo = nil
+                return neutral
+            }
+            suggestedDomain = domain ?? host
+            reasons.append(.init(.antiAdblock, leansTo: .allow, strength: .weak,
+                                 text: "\(domain ?? host) is \(service)'s, an anti-adblock service: blocking it can make sites refuse to load. Letting it through lets those sites show ads."))
+        }
+
         guard !reasons.isEmpty else { return nil }
         return combine(reasons, suggestedDomain: suggestedDomain)
     }
@@ -139,7 +153,7 @@ public enum Advisor {
         let suggestion: RuleAction? = score > 0 ? .allow : score < 0 ? .deny : nil
         let strength: ConnectionAdvice.Strength = abs(score) >= 4 ? .strong : abs(score) >= 2 ? .moderate : .weak
         // Only suggest whole-domain answers for the side the evidence is on.
-        let domainScope = sorted.contains { $0.leansTo == suggestion && [.trackerList, .trackerService, .firstParty].contains($0.kind) }
+        let domainScope = sorted.contains { $0.leansTo == suggestion && [.trackerList, .trackerService, .firstParty, .antiAdblock].contains($0.kind) }
         return ConnectionAdvice(suggestion: suggestion, strength: strength, reasons: sorted, suggestedDomain: domainScope ? suggestedDomain : nil)
     }
 
