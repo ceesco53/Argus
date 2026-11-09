@@ -220,6 +220,34 @@ let app = ClientContext(userID: 501, pid: 1, role: .app)
         #expect(verdict.reason == .blocklist(group.id))
     }
 
+    @Test func lookupsArentDroppedForTheirNameButTheConnectionIs() async {
+        let (core, _) = makeCore()
+        _ = await core.handle(.importRuleGroup(name: "Local", contents: Data("ads.example.com\n".utf8), format: .domains),
+                              client: app, authorization: nil)
+        // Safari looking up a listed name through the router gets its answer at once...
+        let lookup = flow(safari, host: "x.ads.example.com", address: "192.168.1.1", port: 53, proto: .udp)
+        #expect(lookup.isDNSLookup)
+        #expect(core.decide(flowID: UUID(), context: lookup, resume: { _ in }) == .allow(Verdict(.allow, .localNetwork)))
+        // ...and the connection to it is blocked.
+        guard case .deny = core.decide(flowID: UUID(), context: flow(safari, host: "x.ads.example.com"), resume: { _ in }) else {
+            Issue.record("expected the connection to be blocked")
+            return
+        }
+        // A program Argus would have to ask about keeps the lookup blocked, rather than an alert per name.
+        let unknownLookup = flow(unknownApp, host: "x.ads.example.com", address: "9.9.9.9", port: 53, proto: .udp)
+        guard case .deny = core.decide(flowID: UUID(), context: unknownLookup, resume: { _ in }) else {
+            Issue.record("expected the lookup to stay blocked")
+            return
+        }
+        // So does a rule against the DNS server itself.
+        _ = await core.handle(.saveRule(Rule(action: .deny, process: .path(safari.path), remote: .address("192.168.1.1"),
+                                             ports: .single(53))), client: app, authorization: nil)
+        guard case .deny = core.decide(flowID: UUID(), context: lookup, resume: { _ in }) else {
+            Issue.record("expected the rule to block the lookup")
+            return
+        }
+    }
+
     @Test func backupsRoundTrip() async throws {
         let (core, _) = makeCore()
         _ = await core.handle(.saveRule(Rule(action: .deny, remote: .host("x.com"))), client: app, authorization: nil)

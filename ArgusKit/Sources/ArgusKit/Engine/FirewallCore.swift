@@ -243,6 +243,9 @@ public final class FirewallCore: @unchecked Sendable {
         if let ownTeam, ctx.process.teamIdentifier == ownTeam { return Verdict(.allow, .argus, enforced: enforced) }
 
         if let match = compiled.evaluate(ctx) {
+            if match.action == .deny, ctx.isDNSLookup, let verdict = lookupVerdict(ctx, checkSignatures: checkSignatures) {
+                return verdict
+            }
             if checkSignatures, match.action == .allow, settings.enforceCodeSignatures, let rule = match.rule,
                let requirement = rule.codeRequirement, let problem = signatureProblem(requirement, rule: rule, ctx) {
                 let isNew = inner.withLock { inner in
@@ -265,6 +268,19 @@ public final class FirewallCore: @unchecked Sendable {
         case .silentDeny: return Verdict(.deny, .mode(.silentDeny), enforced: enforced)
         case .alert: return settings.isLearning() ? Verdict(.allow, .learning, enforced: enforced) : nil
         }
+    }
+
+    /// Dropping a DNS lookup because of the name it asks about leaves the program waiting about 30
+    /// seconds for an answer that never comes, and a page whose ads and trackers are blocked that
+    /// way stalls in Safari. The connection to that name, which follows, is blocked at once. So a
+    /// lookup denied only for its name is decided by where it goes, the DNS server, instead; it
+    /// stays denied when that's denied too, or when the program would have to be asked.
+    private func lookupVerdict(_ ctx: FlowContext, checkSignatures: Bool) -> Verdict? {
+        var lookup = ctx
+        lookup.hostname = nil
+        lookup.hostnameSource = .none
+        guard let verdict = evaluate(lookup, checkSignatures: checkSignatures), verdict.action == .allow else { return nil }
+        return verdict
     }
 
     // MARK: - Alerts

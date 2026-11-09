@@ -56,6 +56,12 @@ like "deny any program" rules, so allowing a specific app always overrides a lis
 exactly as narrow as a list entry wins over it. IP lists never apply to local-network addresses (some,
 like FireHOL, list the private ranges, which would otherwise cut a Mac off from its own router and DNS).
 
+A DNS lookup macOS makes for an app (Safari's, for one) arrives named after what it looks up. Argus
+doesn't drop a lookup just for that name: a dropped lookup gets no answer, so the app waits about 30
+seconds, and pages stall. The lookup is decided by the DNS server it goes to, and the connection to the
+blocked name that follows is refused at once. A lookup stays blocked when its DNS server is, or when the
+app would otherwise have to be asked.
+
 Lists and rule groups can apply to browsers only (Ads in Browsers, and Ad Domains by default): a
 connection counts as a browser's when the app it's filed under is a known browser. Ad Domains is a
 local rule group of the user's own blocks and allows; its allows are exceptions to every list, so

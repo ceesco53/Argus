@@ -108,6 +108,12 @@ public struct FlowContext: Sendable, Hashable {
         return context
     }
 
+    /// A DNS lookup macOS makes for a program (Safari, and others that look names up through the
+    /// system): it goes to a DNS server, and its hostname is the name being looked up.
+    public var isDNSLookup: Bool {
+        direction == .outgoing && remotePort == 53 && hostname != nil && hostnameSource == .connection
+    }
+
     /// One of the tunnels iCloud Private Relay opens to Apple's relay servers, carrying Safari's
     /// (and other apps') relayed connections.
     public var isPrivateRelayTunnel: Bool {
