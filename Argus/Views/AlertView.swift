@@ -58,6 +58,11 @@ private struct AlertContent: View {
                     .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
             }
             choices
+            if let allowed = allowedBefore {
+                AllowEverywhereOffer(appName: alert.process.name, allowed: allowed) {
+                    Task { await model.answerAll(from: alert.process.path, action: .allow, anywhere: true) }
+                }
+            }
             details
             if !otherAlertsFromApp.isEmpty {
                 Toggle("Answer \(alert.process.name)'s \(otherAlertsFromApp.count) other waiting alert\(otherAlertsFromApp.count == 1 ? "" : "s") the same way",
@@ -75,7 +80,10 @@ private struct AlertContent: View {
         .onAppear {
             duration = Self.duration(from: defaultDuration)
             if alert.hostname == nil { server = .host }
-            if alert.advice?.suggestedDomain != nil, domainOption != nil { server = .domain }
+            if let domain = domainOption,
+               alert.advice?.suggestedDomain != nil || alert.prefersDomain(domain, rules: model.state.rules, waiting: model.alerts) {
+                server = .domain
+            }
             Task { await model.alertShown(alert) }
         }
         .onReceive(ticker) { now = $0 }
@@ -136,7 +144,7 @@ private struct AlertContent: View {
             GridRow {
                 Text("Port").foregroundStyle(.secondary)
                 Picker("Port", selection: $port) {
-                    Text("Only \(Formatting.endpoint(port: alert.port, proto: alert.proto))").tag(AlertDecision.PortScope.thisPort)
+                    Text("Only \(Formatting.port(alert.port, proto: alert.proto))").tag(AlertDecision.PortScope.thisPort)
                     Text("Any port").tag(AlertDecision.PortScope.anyPort)
                 }
                 .labelsHidden()
@@ -249,6 +257,14 @@ private struct AlertContent: View {
         return domain == alert.hostname ? nil : domain
     }
 
+    /// How many times this app has been allowed, when that's often enough, and it's never been
+    /// denied, to offer allowing it everywhere (a game reaching relay after relay, one IP at a time).
+    private var allowedBefore: Int? {
+        guard alert.direction == .outgoing else { return nil }
+        let (allowed, denied) = alert.answeredBefore(in: model.state.rules)
+        return denied == 0 && allowed >= ConnectionAlert.allowEverywhereAfter ? allowed : nil
+    }
+
     private var otherAlertsFromApp: [ConnectionAlert] {
         model.alerts.filter { $0.id != alert.id && $0.process.path == alert.process.path }
     }
@@ -284,6 +300,31 @@ private struct AlertContent: View {
         case "untilRestart": .untilRestart
         default: Int(key).map(AlertDecision.Duration.minutes) ?? .forever
         }
+    }
+}
+
+/// For an app that's been allowed again and again: one answer for all of it.
+private struct AllowEverywhereOffer: View {
+    let appName: String
+    let allowed: Int
+    let allow: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(Color.allowed)
+            Text("You've allowed \(appName) \(allowed) times and never denied it.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 6)
+            Button("Allow Everywhere", action: allow)
+                .controlSize(.small)
+                .help("Lets \(appName) connect to any server on any port, without asking again")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.allowed.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 

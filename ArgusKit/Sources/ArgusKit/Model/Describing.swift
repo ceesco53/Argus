@@ -75,6 +75,12 @@ public enum Formatting {
         }
     }
 
+    /// A port with its service, for rules that cover TCP and UDP alike: "port 443 (HTTPS)".
+    public static func port(_ port: UInt16, proto: TransportProtocol) -> String {
+        let service = proto == .udp && port == 443 ? "HTTPS" : service(port: port, proto: proto)
+        return "port \(port)" + (service.map { " (\($0))" } ?? "")
+    }
+
     public static func endpoint(port: UInt16, proto: TransportProtocol) -> String {
         let service = service(port: port, proto: proto).map { " (\($0))" } ?? ""
         return "\(proto) \(port)\(service)"

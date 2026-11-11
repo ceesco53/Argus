@@ -285,8 +285,11 @@ public final class FirewallCore: @unchecked Sendable {
 
     // MARK: - Alerts
 
+    /// TCP and UDP to the same port are one alert: browsers reach a site over both (HTTPS, and
+    /// HTTP/3 over UDP), and the rule an answer makes covers both.
     static func alertKey(_ ctx: FlowContext) -> String {
-        "\(ctx.process.path)|\(ctx.remoteDisplay)|\(ctx.rulePort)|\(ctx.proto.rawValue)|\(ctx.direction.rawValue)|\(ctx.userID)"
+        let transport = ctx.proto == .tcp || ctx.proto == .udp ? "ip" : "\(ctx.proto.rawValue)"
+        return "\(ctx.process.path)|\(ctx.remoteDisplay)|\(ctx.rulePort)|\(transport)|\(ctx.direction.rawValue)|\(ctx.userID)"
     }
 
     /// How long an alert may wait in the queue before anyone has looked at it. Its real
@@ -443,7 +446,6 @@ public final class FirewallCore: @unchecked Sendable {
         case .any: .any
         }
         let thisPort = decision.portScope == .thisPort
-        let proto: ProtocolMatch = !thisPort ? .any : ctx.proto == .tcp ? .tcp : ctx.proto == .udp ? .udp : .any
         let expiration: RuleExpiration = switch decision.duration {
         case .once, .forever: .never
         case .untilQuit: .untilQuit(pid: ctx.pid, startTime: ctx.processStartTime ?? ProcessLookup.startTime(pid: ctx.pid) ?? 0)
@@ -457,7 +459,9 @@ public final class FirewallCore: @unchecked Sendable {
             codeRequirement: thisProcess ? ctx.process.designatedRequirement : nil,
             remote: remote,
             ports: thisPort ? .single(ctx.rulePort) : .any,
-            proto: proto,
+            // Both TCP and UDP: a program reaches the same service over either (HTTPS and HTTP/3,
+            // DNS, games), and a rule for one left the other to ask again.
+            proto: .any,
             direction: ctx.direction == .incoming ? .incoming : .outgoing,
             userID: decision.allUsers ? nil : ctx.userID,
             profileID: decision.activeProfileOnly ? state.settings.activeProfileID : nil,

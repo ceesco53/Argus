@@ -429,3 +429,49 @@ func flow(_ process: ProcessIdentity = unknownApp, host: String? = "api.example.
         #expect(!compiled.allowsSinceBlocked(blocked("ads.example.com")))
     }
 }
+
+@Suite struct AlertScopeTests {
+    func alert(_ host: String?, app: ProcessIdentity = unknownApp, address: String = "93.184.216.34") -> ConnectionAlert {
+        ConnectionAlert(id: UUID(), createdAt: Date(), deadline: nil, process: app, via: nil, pid: 4242, userID: 501,
+                        hostname: host, address: address, port: 443, proto: .tcp, direction: .outgoing,
+                        pendingConnections: 1, signatureWarning: nil)
+    }
+
+    func rule(_ remote: RemoteMatch, app: ProcessIdentity = unknownApp, _ action: RuleAction = .allow) -> Rule {
+        Rule(action: action, process: .path(app.path), remote: remote, ports: .single(443))
+    }
+
+    @Test func aSiteAnsweredBeforeStartsOnTheWholeDomain() {
+        let style = alert("style.schwab.com")
+        #expect(!style.prefersDomain("schwab.com", rules: [], waiting: [style]))
+        #expect(style.prefersDomain("schwab.com", rules: [rule(.host("www.schwab.com"))], waiting: []))
+        #expect(style.prefersDomain("schwab.com", rules: [rule(.domain("schwab.com"), .deny)], waiting: []))
+        // Another app's rule, another site, or a rule for this very server don't count.
+        #expect(!style.prefersDomain("schwab.com", rules: [rule(.host("www.schwab.com"), app: safari)], waiting: []))
+        #expect(!style.prefersDomain("schwab.com", rules: [rule(.host("www.notschwab.com"))], waiting: []))
+        #expect(!style.prefersDomain("schwab.com", rules: [rule(.host("style.schwab.com"))], waiting: []))
+        var disabled = rule(.host("www.schwab.com"))
+        disabled.isEnabled = false
+        #expect(!style.prefersDomain("schwab.com", rules: [disabled], waiting: []))
+    }
+
+    @Test func moreAlertsWaitingFromTheSiteStartOnTheWholeDomain() {
+        let style = alert("style.schwab.com")
+        #expect(style.prefersDomain("schwab.com", rules: [], waiting: [style, alert("client.schwab.com")]))
+        #expect(!style.prefersDomain("schwab.com", rules: [], waiting: [style, alert("client.schwab.com", app: safari)]))
+        #expect(!style.prefersDomain("schwab.com", rules: [], waiting: [style, alert(nil)]))
+    }
+
+    @Test func countsHowAnAppWasAnsweredBefore() {
+        let game = alert(nil, address: "155.133.238.194")
+        let rules = (0..<6).map { rule(.address("162.254.197.\($0)")) } + [rule(.host("larian.com"), app: safari, .deny)]
+        #expect(game.answeredBefore(in: rules) == (allowed: 6, denied: 0))
+        #expect(game.answeredBefore(in: rules + [rule(.host("ads.example.com"), .deny)]) == (allowed: 6, denied: 1))
+    }
+
+    @Test func rulesForBothTransportsShowJustThePort() {
+        #expect(Formatting.port(443, proto: .udp) == "port 443 (HTTPS)")
+        #expect(Formatting.port(53, proto: .tcp) == "port 53 (DNS)")
+        #expect(Formatting.port(27045, proto: .udp) == "port 27045")
+    }
+}

@@ -21,6 +21,9 @@
 - **Alerts** hold a new connection until you answer, with a suggested answer and its reasons (from
   reference blocklists, the app's identity and your earlier answers). Answer for this server, the whole
   domain or any server; for this port or any; once, until the app quits, for a while, or forever.
+- **Fewer repeat alerts**: one answer covers a port over both TCP and UDP (a browser's HTTPS and HTTP/3
+  are one alert), an alert starts on the whole domain once you've answered for another of its servers
+  or more of them are waiting, and an app you keep allowing gets a one-click Allow Everywhere.
 - **Waiting alerts grouped by app**, answered together, plus a learning period that records quietly for a
   few days and a single review screen afterwards.
 - **Never interrupts a call**: during video calls or with the screen locked, Argus decides on its own

@@ -47,6 +47,35 @@ public struct ConnectionAlert: Codable, Hashable, Sendable, Identifiable {
 
     /// The registrable domain to offer for a domain-wide rule ("apple.com" for "www.apple.com").
     public var suggestedDomain: String? { hostname.flatMap(DomainName.registrableDomain) }
+
+    /// Whether to start on the whole of `domain` rather than this one server: the app already has
+    /// a rule for another of its servers, or more of its alerts for the domain are waiting. A
+    /// site's page reaches a dozen of its servers at once, and answering each one only brings
+    /// the next alert.
+    public func prefersDomain(_ domain: String, rules: [Rule], waiting: [ConnectionAlert]) -> Bool {
+        func inDomain(_ host: String) -> Bool { host == domain || host.hasSuffix("." + domain) }
+        let ruled = rules.contains { rule in
+            guard rule.isEnabled, rule.process == .path(process.path) else { return false }
+            switch rule.remote {
+            case .host(let host): return host != hostname && inDomain(host)
+            case .domain(let ruled): return inDomain(ruled)
+            default: return false
+            }
+        }
+        return ruled || waiting.contains { other in
+            other.id != id && other.process.path == process.path && other.direction == direction
+                && other.hostname.map { $0 != hostname && inDomain($0) } == true
+        }
+    }
+
+    /// How you've answered this app before: its enabled rules that allow and that deny.
+    public func answeredBefore(in rules: [Rule]) -> (allowed: Int, denied: Int) {
+        let own = rules.filter { $0.isEnabled && $0.process == .path(process.path) }
+        return (own.count { $0.action == .allow }, own.count { $0.action == .deny })
+    }
+
+    /// Offer to allow the app everywhere once it's been allowed this many times and never denied.
+    public static let allowEverywhereAfter = 5
 }
 
 /// A suggested answer for an alert, built from independent signals.

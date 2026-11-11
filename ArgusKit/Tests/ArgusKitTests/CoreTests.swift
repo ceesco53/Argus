@@ -79,6 +79,31 @@ let app = ClientContext(userID: 501, pid: 1, role: .app)
         #expect(verdict.reason == .rule(rule.id))
     }
 
+    @Test func oneAnswerCoversTCPAndUDP() {
+        let (core, delegate) = makeCore()
+        let released = Locked<[Verdict]>([])
+        _ = core.decide(flowID: UUID(), context: flow(proto: .tcp), resume: { v in released.withLock { $0.append(v) } })
+        _ = core.decide(flowID: UUID(), context: flow(proto: .udp), resume: { v in released.withLock { $0.append(v) } })
+        #expect(delegate.alerts.current.count == 1) // HTTP/3 over UDP joins the HTTPS alert
+
+        let alert = delegate.alerts.current[0]
+        core.resolveAlert(alert.id, decision: AlertDecision(action: .allow))
+        #expect(released.current.count == 2)
+        let rule = try! #require(core.state.rules.last)
+        #expect(rule.proto == .any)
+        #expect(rule.ports == .single(443))
+        #expect(rule.summary.hasSuffix("port 443"))
+
+        // Neither asks again.
+        for proto in [TransportProtocol.tcp, .udp] {
+            guard case .allow = core.decide(flowID: UUID(), context: flow(proto: proto), resume: { _ in }) else {
+                Issue.record("expected \(proto) to be allowed")
+                return
+            }
+        }
+        #expect(delegate.alerts.current.count == 1)
+    }
+
     @Test func onceAnswersDontCreateRules() async {
         let (core, delegate) = makeCore()
         _ = core.decide(flowID: UUID(), context: flow(), resume: { _ in })
