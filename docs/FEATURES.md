@@ -24,6 +24,13 @@
 - **Fewer repeat alerts**: one answer covers a port over both TCP and UDP (a browser's HTTPS and HTTP/3
   are one alert), an alert starts on the whole domain once you've answered for another of its servers
   or more of them are waiting, and an app you keep allowing gets a one-click Allow Everywhere.
+- **One answer for servers without names**: a game reaches relay after relay, each a new address and
+  often a new port, with nothing to tell one from the next. Argus reads what an app's waiting alerts
+  and earlier answers share, and starts the alert there: the network the addresses are in
+  (155.133.252.x, or 155.133.x.x), or any server once they're spread over several networks, on the
+  stretch of ports the app keeps to (27000–27099). The alert says what one answer takes in, the
+  waiting alerts it answers and the earlier rules it replaces, and Just This One goes back to the
+  one server. Networks are always among an alert's choices for a server without a name.
 - **Waiting alerts grouped by app**, answered together, plus a learning period that records quietly for a
   few days and a single review screen afterwards.
 - **Never interrupts a call**: during video calls or with the screen locked, Argus decides on its own
@@ -35,7 +42,9 @@
 - Rules by program, server (host, domain, IP address or network, local network), port, protocol and
   direction, for every user or one, in every profile or one.
 - **Temporary rules** (until quit, until restart, for a time) and **priority rules** that nothing can override.
-- Problems flagged: duplicate rules and rules another rule always overrules.
+- Problems flagged: duplicate rules, rules another rule always overrules, and rules a broader rule for
+  the same program already covers (unless a rule in between would decide differently without them),
+  with one button to remove what isn't needed.
 - **Undo** any change from a message right after it or from Recent Changes (⌥⌘Z).
 
 ## Ads in browsers

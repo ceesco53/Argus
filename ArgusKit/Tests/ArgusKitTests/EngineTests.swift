@@ -475,3 +475,142 @@ func flow(_ process: ProcessIdentity = unknownApp, host: String? = "api.example.
         #expect(Formatting.port(27045, proto: .udp) == "port 27045")
     }
 }
+
+/// The wider answer an alert starts on: what it shares with the app's other alerts and rules.
+@Suite struct AlertPatternTests {
+    let game = ProcessIdentity(path: "/Applications/Game.app/Contents/MacOS/game", name: "game", signature: .developerID,
+                               designatedRequirement: "identifier \"com.example.game\"")
+
+    func relay(_ address: String, _ port: UInt16, host: String? = nil, app: ProcessIdentity? = nil,
+               direction: TrafficDirection = .outgoing) -> ConnectionAlert {
+        ConnectionAlert(id: UUID(), createdAt: Date(), deadline: nil, process: app ?? game, via: nil, pid: 4242, userID: 501,
+                        hostname: host, address: address, port: port, proto: .udp, direction: direction,
+                        pendingConnections: 1, signatureWarning: nil)
+    }
+
+    func allowed(_ remote: RemoteMatch, _ ports: PortMatch, _ action: RuleAction = .allow, app: ProcessIdentity? = nil) -> Rule {
+        Rule(action: action, process: .path((app ?? game).path), remote: remote, ports: ports, origin: .alert)
+    }
+
+    let hundred = PortRange(27000, 27099)
+
+    @Test func relaysOnSeveralNetworksStartOnAnyServerAndTheirPorts() {
+        let alert = relay("155.133.252.87", 27024)
+        let others = [relay("162.254.193.98", 27031), relay("103.10.124.118", 27018), relay("146.66.155.4", 27040)]
+        #expect(alert.pattern(rules: [], waiting: [alert] + others) == AlertPattern(servers: .any, ports: hundred))
+        // Earlier answers count like waiting alerts.
+        let rules = [allowed(.address("162.254.193.98"), .single(27031)), allowed(.host("103.10.124.118"), .single(27018)),
+                     allowed(.address("146.66.155.4"), .single(27040))]
+        #expect(alert.pattern(rules: rules, waiting: [alert]) == AlertPattern(servers: .any, ports: hundred))
+        // Two other networks aren't enough for any server; the ports are still a stretch.
+        #expect(alert.pattern(rules: [], waiting: Array(others.prefix(2))) == AlertPattern(ports: hundred))
+        // Nor are another app's, or anything for an app that was denied something.
+        let safariRules = rules.map { allowed($0.remote, $0.ports, app: safari) }
+        #expect(alert.pattern(rules: safariRules, waiting: others.map { relay($0.address!, $0.port, app: safari) }) == nil)
+        #expect(alert.pattern(rules: rules + [allowed(.host("telemetry.example.com"), .any, .deny)], waiting: [])
+            == AlertPattern(ports: hundred))
+        var off = rules
+        off[0].isEnabled = false
+        #expect(alert.pattern(rules: off, waiting: []) == AlertPattern(ports: hundred)) // a rule switched off wasn't an answer
+    }
+
+    @Test func neighboursStartOnTheNetworkTheyShare() {
+        let alert = relay("155.133.252.87", 27024)
+        let near = IPNetwork("155.133.252.0/24")!, wide = IPNetwork("155.133.0.0/16")!
+        #expect(alert.networks == [near, wide])
+        #expect(alert.pattern(rules: [], waiting: [relay("155.133.252.9", 27024)]) == AlertPattern(servers: .network(near)))
+        #expect(alert.pattern(rules: [allowed(.address("155.133.252.9"), .single(27024), .deny)], waiting: [])
+            == AlertPattern(servers: .network(near)))
+        // Further apart, but in the same wider network.
+        #expect(alert.pattern(rules: [], waiting: [relay("155.133.252.9", 27024), relay("155.133.238.194", 27024)])
+            == AlertPattern(servers: .network(wide)))
+        // A server on another port has nothing to do with this one, and this address itself isn't a neighbour.
+        #expect(alert.pattern(rules: [], waiting: [relay("155.133.252.9", 443), relay("155.133.252.87", 9000)]) == nil)
+        // IPv6 has its own networks.
+        let v6 = relay("2a01:bc80:8:100::1f", 27024)
+        #expect(v6.networks.map(\.description) == ["2a01:bc80:8:100::/64", "2a01:bc80:8::/48"])
+        #expect(v6.pattern(rules: [], waiting: [relay("2a01:bc80:8:100::20", 27024)])?.servers == .network(v6.networks[0]))
+    }
+
+    @Test func serversWithNamesAndTheLocalNetworkKeepTheirOwnChoices() {
+        let others = [relay("162.254.193.98", 443), relay("103.10.124.118", 443), relay("146.66.155.4", 443), relay("93.184.216.34", 443)]
+        #expect(relay("155.133.252.87", 443).pattern(rules: [], waiting: others)?.servers == .any)
+        // A name tells this server from the others, and its domain is what widens it.
+        let named = relay("155.133.252.87", 443, host: "api.example.com")
+        #expect(named.networks.isEmpty)
+        #expect(named.pattern(rules: [], waiting: others) == nil)
+        // Named servers don't make a nameless one part of a crowd either.
+        let sites = ["a.example.com", "b.example.org", "c.example.net", "d.example.io"].map { relay("93.184.216.34", 443, host: $0) }
+        #expect(relay("155.133.252.87", 443).pattern(rules: [], waiting: sites) == nil)
+        let local = relay("192.168.1.40", 27024)
+        #expect(local.networks.isEmpty)
+        #expect(local.pattern(rules: [], waiting: [relay("192.168.1.41", 27024)]) == nil)
+        // Connections coming in are a different question.
+        let incoming = relay("155.133.252.87", 27024, direction: .incoming)
+        #expect(incoming.pattern(rules: [], waiting: [relay("155.133.252.9", 27024, direction: .incoming)]) == nil)
+    }
+
+    @Test func aStretchOfPortsNeedsThreeNeighbours() {
+        func stretch(_ port: UInt16, _ others: [UInt16]) -> PortRange? { AlertPattern.stretch(around: port, in: others.map { $0...$0 }) }
+        #expect(stretch(27024, [27031, 27018]) == hundred)
+        #expect(stretch(27024, [27031]) == nil)
+        #expect(stretch(27024, [27024, 27024]) == nil) // the same port again
+        #expect(stretch(27095, [27110, 27180]) == PortRange(27000, 27199))
+        #expect(stretch(1050, [1030, 1090]) == PortRange(1024, 1099))
+        #expect(stretch(65500, [65510, 65530]) == PortRange(65500, 65535))
+        // Well-known ports are services of their own, and ports far apart aren't neighbours.
+        #expect(stretch(110, [80, 143]) == nil)
+        #expect(stretch(8080, [8443, 9000]) == nil)
+        // Ports all over the place are an app picking them at random.
+        #expect(stretch(50000, stride(from: UInt16(50090), through: 52000, by: 90).map { $0 }) == nil)
+        // A named server on a stretch of ports widens its ports only.
+        let named = relay("93.184.216.34", 5001, host: "relay.example.com")
+        let more = [relay("93.184.216.34", 5002, host: "relay.example.com"), relay("93.184.216.34", 5003, host: "relay.example.com")]
+        #expect(named.pattern(rules: [], waiting: more) == AlertPattern(ports: PortRange(5000, 5099)))
+    }
+
+    @Test func aWiderRuleOnTheNextPortsIsCarriedOn() {
+        // Already allowed anywhere on 27000–27099; the next relay is just past the end.
+        let alert = relay("155.133.252.87", 27105)
+        #expect(alert.pattern(rules: [allowed(.any, .ranges([hundred]))], waiting: [])
+            == AlertPattern(servers: .any, ports: PortRange(27000, 27199)))
+        let network = IPNetwork("155.133.0.0/16")!
+        #expect(alert.pattern(rules: [allowed(.address(network.description), .ranges([hundred]))], waiting: [])
+            == AlertPattern(servers: .network(network), ports: PortRange(27000, 27199)))
+        // Networks answered before count towards any server like single servers do.
+        let networks = ["162.254.192.0/21", "103.10.124.0/23", "146.66.152.0/21"].map { allowed(.address($0), .ranges([hundred])) }
+        #expect(alert.pattern(rules: networks, waiting: [])?.servers == .any)
+    }
+
+    @Test func answersMakeRulesForNetworksAndStretchesOfPorts() {
+        func rule(_ decision: AlertDecision, host: String? = nil, address: String = "155.133.252.87") -> Rule {
+            decision.rule(process: game, hostname: host, address: IPAddress(address), port: 27024, direction: .outgoing, userID: 501, activeProfile: nil)
+        }
+        let wide = rule(AlertDecision(action: .allow, remoteScope: .address, networkPrefix: 24, portRange: hundred))
+        #expect(wide.remote == .address("155.133.252.0/24"))
+        #expect(wide.ports == .ranges([hundred]))
+        #expect(wide.summary == "Allow game → 155.133.252.0/24 port 27000-27099")
+        #expect(rule(AlertDecision(action: .allow, remoteScope: .any, portRange: hundred)).remote == .any)
+        #expect(rule(AlertDecision(action: .allow, remoteScope: .address, networkPrefix: 48), address: "2a01:bc80:8:100::1f").remote == .address("2a01:bc80:8::/48"))
+        // Nonsense falls back to the one address and port rather than something wider.
+        #expect(rule(AlertDecision(action: .allow, remoteScope: .address, networkPrefix: 0)).remote == .address("155.133.252.87"))
+        #expect(rule(AlertDecision(action: .allow, remoteScope: .address, networkPrefix: 64)).remote == .address("155.133.252.87"))
+        #expect(rule(AlertDecision(action: .allow, portRange: PortRange(5000, 5099))).ports == .single(27024))
+        #expect(rule(AlertDecision(action: .allow, portScope: .anyPort, portRange: hundred)).ports == .any)
+        // A network is for a server without a name.
+        #expect(rule(AlertDecision(action: .allow, remoteScope: .host, networkPrefix: 24), host: "api.example.com").remote == .host("api.example.com"))
+        #expect(IPNetwork("155.133.0.0/16")?.familiarDescription == "155.133.x.x")
+        #expect(IPNetwork("155.133.252.0/23")?.familiarDescription == "155.133.252.0/23")
+    }
+
+    @Test func olderEnginesStillReadAnAnswer() throws {
+        // The additions are left out of a plain answer and ignored where they're unknown, so an
+        // engine from before them makes the rule for the one address and port.
+        let plain = try JSONEncoder().encode(AlertDecision(action: .allow))
+        #expect(!String(decoding: plain, as: UTF8.self).contains("networkPrefix"))
+        #expect(!String(decoding: plain, as: UTF8.self).contains("portRange"))
+        #expect(try JSONDecoder().decode(AlertDecision.self, from: plain) == AlertDecision(action: .allow))
+        let wide = AlertDecision(action: .allow, remoteScope: .address, networkPrefix: 16, portRange: hundred)
+        #expect(try JSONDecoder().decode(AlertDecision.self, from: JSONEncoder().encode(wide)) == wide)
+    }
+}

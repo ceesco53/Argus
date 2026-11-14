@@ -20,8 +20,10 @@ struct RulesView: View {
         var id: String { rawValue }
     }
 
-    /// Duplicates and rules that can never apply.
-    private var issues: [UUID: RuleIssue] { RuleAnalysis.issues(in: model.state.rules) }
+    /// Duplicates, rules a broader rule covers, and rules that can never apply.
+    private var issues: [UUID: RuleIssue] {
+        RuleAnalysis.issues(in: model.state.rules, alongside: model.state.ruleGroups.filter(\.isEnabled).flatMap(\.rules))
+    }
 
     var body: some View {
         @Bindable var model = model
@@ -198,13 +200,15 @@ struct RulesView: View {
 
     @ToolbarContentBuilder
     private func toolbar(issues: [UUID: RuleIssue]) -> some ToolbarContent {
-            let duplicates = issues.compactMap { id, issue -> UUID? in if case .duplicate = issue { id } else { nil } }
+            let redundant = issues.filter(\.value.isRedundant).map(\.key)
+            let onlyDuplicates = issues.values.allSatisfy { if case .covered = $0 { false } else { true } }
             ToolbarItemGroup {
-                if !duplicates.isEmpty {
-                    Button("Remove \(duplicates.count) Duplicate\(duplicates.count == 1 ? "" : "s")") {
-                        Task { await model.deleteRules(duplicates) }
+                if !redundant.isEmpty {
+                    Button("Remove \(redundant.count) \(onlyDuplicates ? "Duplicate" : "Unneeded Rule")\(redundant.count == 1 ? "" : "s")") {
+                        Task { await model.deleteRules(redundant) }
                     }
-                    .help("Rules that do exactly what an older rule already does")
+                    .help(onlyDuplicates ? "Rules that do exactly what an older rule already does"
+                        : "Rules that do what an older rule does, or that a broader rule for the same program already covers")
                 }
                 Toggle(isOn: $groupByProgram) {
                     Label("Group by Program", systemImage: "rectangle.grid.1x2")

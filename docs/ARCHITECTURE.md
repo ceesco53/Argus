@@ -47,6 +47,31 @@ list you've *enabled* is blocked before anyone is asked, so only lists you haven
 The suggested button becomes the default, and unanswered alerts can optionally follow a confident
 suggestion (Settings › Alerts).
 
+## Wider answers
+
+An alert for a server without a name (`AlertPattern`) looks at the app's other waiting alerts and its
+enabled rules, and starts on what they share rather than on the one address and port:
+
+| What the app's other servers show | The alert starts on |
+|---|---|
+| Three or more different ports, each within 100 of the next, above 1023 | That stretch of ports, in whole hundreds |
+| Another address in the same x.x.x.* (an IPv6 /64), on these ports | That network |
+| Two or more in the same x.x.*.* (a /48), not all in the nearer one | The wider network |
+| Addresses in three or more other networks, for an app that was never denied anything | Any server, on these ports |
+| A rule for a network or any server on neighbouring ports | The same servers, on the longer stretch |
+
+Servers with names are told apart by them and aren't counted; a domain widens those. A suggestion to
+deny is about the one server, so it isn't widened. A pattern that only shows once the alert is on
+screen is offered with a button, never applied under the pointer.
+
+A network or a stretch of ports travels in the answer as an optional addition (`networkPrefix`,
+`portRange`), so a filter from before them still reads the answer and makes the narrower rule.
+A rule made from an alert that lasts forever takes the place of the app's earlier alert answers that
+it covers (`RuleAnalysis.answersReplaced`), as one change that can be undone. A rule is only covered
+when the broader one has the same action, program, priority and signature requirement, applies
+wherever it does, and no rule that says the opposite ranks between the two and could match the same
+connections. Rules written or annotated by hand are never replaced; Rules flags them instead.
+
 ## Rule precedence
 
 When several rules match, Argus compares them in this order and the first difference wins:

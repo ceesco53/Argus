@@ -30,7 +30,10 @@ private struct AlertContent: View {
     @Environment(AppModel.self) private var model
     @AppStorage("alertDefaultDuration") private var defaultDuration = "forever"
     @State private var server: ServerChoice = .host
-    @State private var port: AlertDecision.PortScope = .thisPort
+    @State private var port: PortChoice = .thisPort
+    /// What this alert shares with the app's other alerts and rules, when that's wider than its
+    /// one server and port. The choices start on it; one found later is offered instead.
+    @State private var pattern: AlertPattern?
     @State private var process: AlertDecision.ProcessScope = .thisProcess
     @State private var duration: AlertDecision.Duration = .forever
     @State private var onlyMe = false
@@ -41,7 +44,8 @@ private struct AlertContent: View {
     @State private var now = Date()
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    enum ServerChoice: Hashable { case host, domain, any }
+    enum ServerChoice: Hashable { case host, domain, network(IPNetwork), any }
+    enum PortChoice: Hashable { case thisPort, range(PortRange), anyPort }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -57,15 +61,28 @@ private struct AlertContent: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
             }
+            let reach = self.reach
+            if let pattern = notedPattern {
+                PatternNote(headline: headline(for: pattern), detail: detail(of: reach, on: pattern), isApplied: isOn(pattern)) {
+                    withAnimation(.snappy) { if isOn(pattern) { narrow(from: pattern) } else { start(on: pattern) } }
+                }
+            }
             choices
-            if let allowed = allowedBefore {
+            // Any server on the app's ports is the closer fit; Allow Everywhere would only repeat it.
+            if notedPattern?.servers != .any, let allowed = allowedBefore {
                 AllowEverywhereOffer(appName: alert.process.name, allowed: allowed) {
                     Task { await model.answerAll(from: alert.process.path, action: .allow, anywhere: true) }
                 }
             }
             details
-            if !otherAlertsFromApp.isEmpty {
-                Toggle("Answer \(alert.process.name)'s \(otherAlertsFromApp.count) other waiting alert\(otherAlertsFromApp.count == 1 ? "" : "s") the same way",
+            if notedPattern == nil, let summary = summary(of: reach) {
+                Label("\(preferredAction == .allow ? "Allowing" : "Denying") also \(summary).", systemImage: "checkmark.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            let others = otherAlertsFromApp.filter { !reach.alerts.contains($0.id) }
+            if !others.isEmpty {
+                Toggle("Answer \(alert.process.name)'s \(others.count) other waiting alert\(others.count == 1 ? "" : "s") the same way",
                        isOn: $answerOthers)
                     .toggleStyle(.checkbox)
                     .font(.callout)
@@ -84,7 +101,16 @@ private struct AlertContent: View {
                alert.advice?.suggestedDomain != nil || alert.prefersDomain(domain, rules: model.state.rules, waiting: model.alerts) {
                 server = .domain
             }
+            pattern = alert.pattern(rules: model.state.rules, waiting: model.alerts)
+            if let pattern = notedPattern { start(on: pattern) }
             Task { await model.alertShown(alert) }
+        }
+        .onChange(of: model.alerts.count) {
+            // More of the app's alerts arrived while this one was showing. What they share is
+            // offered, with a button: the choices never change under the pointer.
+            if let fresh = alert.pattern(rules: model.state.rules, waiting: model.alerts), fresh != pattern {
+                withAnimation(.snappy) { pattern = fresh }
+            }
         }
         .onReceive(ticker) { now = $0 }
     }
@@ -137,6 +163,9 @@ private struct AlertContent: View {
                     if let domain = domainOption {
                         Text("\(domain) and its subdomains").tag(ServerChoice.domain)
                     }
+                    ForEach(networkOptions, id: \.self) { network in
+                        Text("Any of \(network.familiarDescription)").tag(ServerChoice.network(network))
+                    }
                     Text("Any server").tag(ServerChoice.any)
                 }
                 .labelsHidden()
@@ -144,8 +173,11 @@ private struct AlertContent: View {
             GridRow {
                 Text("Port").foregroundStyle(.secondary)
                 Picker("Port", selection: $port) {
-                    Text("Only \(Formatting.port(alert.port, proto: alert.proto))").tag(AlertDecision.PortScope.thisPort)
-                    Text("Any port").tag(AlertDecision.PortScope.anyPort)
+                    Text("Only \(Formatting.port(alert.port, proto: alert.proto))").tag(PortChoice.thisPort)
+                    ForEach(portRanges, id: \.self) { range in
+                        Text("Ports \(Self.span(range))").tag(PortChoice.range(range))
+                    }
+                    Text("Any port").tag(PortChoice.anyPort)
                 }
                 .labelsHidden()
             }
@@ -232,7 +264,7 @@ private struct AlertContent: View {
     /// The suggested answer is the prominent, Return-key button; Allow is the default otherwise.
     @ViewBuilder
     private func answerButton(_ action: RuleAction) -> some View {
-        let preferred = (alert.advice?.suggestion ?? .allow) == action
+        let preferred = preferredAction == action
         let button = Button(role: action == .deny ? .destructive : nil) {
             answer(action)
         } label: {
@@ -269,6 +301,86 @@ private struct AlertContent: View {
         model.alerts.filter { $0.id != alert.id && $0.process.path == alert.process.path }
     }
 
+    /// The answer the prominent button gives.
+    private var preferredAction: RuleAction { alert.advice?.suggestion ?? .allow }
+
+    // MARK: A wider answer
+
+    /// The pattern to start on and explain. A suggestion to deny is about this one server (a
+    /// listed address, say), so it isn't widened to the app's others; the choices are still there.
+    private var notedPattern: AlertPattern? { alert.advice?.suggestion == .deny ? nil : pattern }
+
+    /// The networks around a nameless server, narrowest first, with the pattern's if it's another
+    /// (and the one chosen, should the pattern have moved on from it).
+    private var networkOptions: [IPNetwork] {
+        var networks = alert.networks
+        if case .network(let network)? = pattern?.servers, !networks.contains(network) { networks.append(network) }
+        if case .network(let chosen) = server, !networks.contains(chosen) { networks.append(chosen) }
+        return networks.sorted { $0.prefixLength > $1.prefixLength }
+    }
+
+    /// The pattern's stretch of ports, and the one chosen if that's another.
+    private var portRanges: [PortRange] {
+        var ranges = [pattern?.ports].compactMap { $0 }
+        if case .range(let chosen) = port, !ranges.contains(chosen) { ranges.append(chosen) }
+        return ranges
+    }
+
+    private func isOn(_ pattern: AlertPattern) -> Bool {
+        let servers: Bool = switch pattern.servers {
+        case .any: server == .any
+        case .network(let network): server == .network(network)
+        case nil: true
+        }
+        return servers && pattern.ports.map { port == .range($0) } ?? true
+    }
+
+    private func start(on pattern: AlertPattern) {
+        switch pattern.servers {
+        case .any: server = .any
+        case .network(let network): server = .network(network)
+        case nil: break
+        }
+        if let range = pattern.ports { port = .range(range) }
+    }
+
+    /// Back to this one server on this one port.
+    private func narrow(from pattern: AlertPattern) {
+        if pattern.servers != nil { server = .host }
+        port = .thisPort
+    }
+
+    /// What the answer as chosen takes in beyond this alert.
+    private var reach: AlertReach {
+        alert.reach(of: decision(preferredAction), state: model.state, waiting: model.alerts)
+    }
+
+    private func headline(for pattern: AlertPattern) -> String {
+        let app = alert.process.name
+        let ports = pattern.ports.map { "ports \(Self.span($0))" } ?? Formatting.port(alert.port, proto: alert.proto)
+        switch pattern.servers {
+        case .any: return "\(app) keeps reaching new servers on \(ports)"
+        case .network(let network): return "\(app) keeps reaching servers at \(network.familiarDescription) on \(ports)"
+        case nil: return "\(app) reaches this server on one port after another"
+        }
+    }
+
+    private func detail(of reach: AlertReach, on pattern: AlertPattern) -> String {
+        guard isOn(pattern) else { return "Answered one at a time, each new one asks again." }
+        guard let summary = summary(of: reach) else { return "One answer covers the ones still to come." }
+        return "One answer covers the ones still to come. \(preferredAction == .allow ? "Allowing" : "Denying") also \(summary)."
+    }
+
+    /// "answers 40 more waiting alerts and replaces 526 earlier rules", or nil when there's nothing to say.
+    private func summary(of reach: AlertReach) -> String? {
+        var parts: [String] = []
+        if !reach.alerts.isEmpty { parts.append("answers \(reach.alerts.count) more waiting alert\(reach.alerts.count == 1 ? "" : "s")") }
+        if reach.rules > 0 { parts.append("replaces \(reach.rules.formatted()) earlier rule\(reach.rules == 1 ? "" : "s")") }
+        return parts.isEmpty ? nil : parts.joined(separator: " and ")
+    }
+
+    static func span(_ range: PortRange) -> String { "\(range.lower)–\(range.upper)" }
+
     /// What happens if nobody answers in time.
     private var timeoutAction: RuleAction {
         let settings = model.state.settings
@@ -280,17 +392,30 @@ private struct AlertContent: View {
 
     // MARK: Answering
 
-    private func answer(_ action: RuleAction) {
-        let remote: AlertDecision.RemoteScope = switch server {
-        case .host: alert.hostname == nil ? .address : .host
-        case .domain: .domain(domainOption ?? alert.hostname ?? "")
-        case .any: .any
+    private func decision(_ action: RuleAction) -> AlertDecision {
+        var decision = AlertDecision(action: action, processScope: process, duration: duration, allUsers: !onlyMe, activeProfileOnly: onlyThisProfile)
+        switch server {
+        case .host: decision.remoteScope = alert.hostname == nil ? .address : .host
+        case .domain: decision.remoteScope = .domain(domainOption ?? alert.hostname ?? "")
+        case .network(let network):
+            decision.remoteScope = .address
+            decision.networkPrefix = network.prefixLength
+        case .any: decision.remoteScope = .any
         }
-        let decision = AlertDecision(
-            action: action, processScope: process, remoteScope: remote, portScope: port, duration: duration,
-            allUsers: !onlyMe, activeProfileOnly: onlyThisProfile)
-        let others = answerOthers ? otherAlertsFromApp : []
-        Task { await model.resolve(alert, with: decision, alsoAnswering: others) }
+        switch port {
+        case .thisPort: break
+        case .range(let range): decision.portRange = range
+        case .anyPort: decision.portScope = .anyPort
+        }
+        return decision
+    }
+
+    private func answer(_ action: RuleAction) {
+        let decision = decision(action)
+        let reach = alert.reach(of: decision, state: model.state, waiting: model.alerts)
+        // The rule answers the alerts it covers by itself; "the same way" is for the rest.
+        let others = answerOthers ? otherAlertsFromApp.filter { !reach.alerts.contains($0.id) } : []
+        Task { await model.resolve(alert, with: decision, alsoAnswering: others, offeringUndo: reach.rules > 0) }
     }
 
     static func duration(from key: String) -> AlertDecision.Duration {
@@ -300,6 +425,36 @@ private struct AlertContent: View {
         case "untilRestart": .untilRestart
         default: Int(key).map(AlertDecision.Duration.minutes) ?? .forever
         }
+    }
+}
+
+/// Why an alert starts on more than its one server and port, and what one answer then takes in.
+private struct PatternNote: View {
+    let headline: String
+    let detail: String
+    /// Whether the choices below are on the pattern now.
+    let isApplied: Bool
+    let toggle: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                .font(.title3)
+                .foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(headline).font(.callout.weight(.semibold))
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 6)
+            Button(isApplied ? "Just This One" : "Cover Them All", action: toggle)
+                .controlSize(.small)
+                .help(isApplied ? "Answer for this one server and port only" : "Answer for all of them at once")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityElement(children: .contain)
     }
 }
 

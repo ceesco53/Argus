@@ -170,6 +170,13 @@ public struct IPNetwork: Hashable, Sendable, CustomStringConvertible {
     }
 
     public var description: String { isSingleAddress ? address.description : "\(address)/\(prefixLength)" }
+
+    /// "155.133.252.x" for the IPv4 networks that read as their leading numbers; `description` otherwise.
+    public var familiarDescription: String {
+        guard case .v4(let value) = address, [8, 16, 24].contains(prefixLength) else { return description }
+        let kept = prefixLength / 8
+        return (0..<4).map { $0 < kept ? "\(value >> UInt32(24 - $0 * 8) & 0xFF)" : "x" }.joined(separator: ".")
+    }
 }
 
 /// A sorted, merged set of address ranges answering membership in O(log n).

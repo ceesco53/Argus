@@ -385,7 +385,13 @@ public final class FirewallCore: @unchecked Sendable {
         if let decision {
             if decision.duration != .once, let first = pending.waiters.first {
                 let rule = makeRule(from: decision, context: first.context)
-                mutate { $0.rules.append(rule) }
+                mutate { state in
+                    // A wider answer takes the place of the app's earlier ones that it covers.
+                    let listed = state.ruleGroups.filter(\.isEnabled).flatMap(\.rules)
+                    let replaced = Set(RuleAnalysis.answersReplaced(by: rule, in: state.rules, alongside: listed))
+                    if !replaced.isEmpty { state.rules.removeAll { replaced.contains($0.id) } }
+                    state.rules.append(rule)
+                }
                 if case .untilQuit(let pid, _) = rule.expiration { watchExit(of: pid) }
                 verdict = Verdict(decision.action, .rule(rule.id), enforced: host.canEnforce)
                 createdRule = true
@@ -438,35 +444,16 @@ public final class FirewallCore: @unchecked Sendable {
     }
 
     func makeRule(from decision: AlertDecision, context ctx: FlowContext) -> Rule {
-        let remote: RemoteMatch = switch decision.remoteScope {
-        case .host: ctx.hostname.map(RemoteMatch.host) ?? ctx.address.map { .address($0.description) } ?? .any
-        case .domain(let domain): .domain(domain)
-        case .address: ctx.address.map { .address($0.description) } ?? .any
-        case .localNetwork: .localNetwork
-        case .any: .any
-        }
-        let thisPort = decision.portScope == .thisPort
-        let expiration: RuleExpiration = switch decision.duration {
+        var rule = decision.rule(
+            process: ctx.process, hostname: ctx.hostname, address: ctx.address, port: ctx.rulePort, direction: ctx.direction,
+            userID: ctx.userID, activeProfile: state.settings.activeProfileID)
+        rule.expiration = switch decision.duration {
         case .once, .forever: .never
         case .untilQuit: .untilQuit(pid: ctx.pid, startTime: ctx.processStartTime ?? ProcessLookup.startTime(pid: ctx.pid) ?? 0)
         case .untilRestart: .untilRestart(bootSession: bootSession)
         case .minutes(let minutes): .date(Date().addingTimeInterval(TimeInterval(minutes * 60)))
         }
-        let thisProcess = decision.processScope == .thisProcess
-        return Rule(
-            action: decision.action,
-            process: thisProcess ? .path(ctx.process.path) : .any,
-            codeRequirement: thisProcess ? ctx.process.designatedRequirement : nil,
-            remote: remote,
-            ports: thisPort ? .single(ctx.rulePort) : .any,
-            // Both TCP and UDP: a program reaches the same service over either (HTTPS and HTTP/3,
-            // DNS, games), and a rule for one left the other to ask again.
-            proto: .any,
-            direction: ctx.direction == .incoming ? .incoming : .outgoing,
-            userID: decision.allUsers ? nil : ctx.userID,
-            profileID: decision.activeProfileOnly ? state.settings.activeProfileID : nil,
-            expiration: expiration,
-            origin: .alert)
+        return rule
     }
 
     // MARK: - Traffic capture hooks
@@ -1131,7 +1118,9 @@ public final class FirewallCore: @unchecked Sendable {
             return summary
         case .resolveAlert:
             guard let rule = change.addedRules.first else { return "Answered an alert" }
+            let replaced = change.removedRules.count
             return "\(rule.action == .allow ? "Allowed" : "Denied") from an alert: \(rule.summary)"
+                + (replaced == 0 ? "" : ", in place of \(replaced) rule\(replaced == 1 ? "" : "s") it covers")
         case .saveProfile(let profile):
             return before.profile(id: profile.id) == nil ? "Added profile “\(profile.name)”" : "Changed profile “\(profile.name)”"
         case .deleteProfile(let id):

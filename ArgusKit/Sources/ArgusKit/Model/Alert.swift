@@ -170,10 +170,19 @@ public struct AlertDecision: Codable, Hashable, Sendable {
     public var allUsers: Bool
     /// Put the rule in the active profile only, rather than all profiles.
     public var activeProfileOnly: Bool
+    /// With `remoteScope` `.address`: every address that shares this many leading bits with the
+    /// connection's (24 is all of 155.133.252.x), rather than the one address.
+    ///
+    /// This and `portRange` are optional additions to an answer, not new scopes, so that an engine
+    /// from before them still reads the answer and makes the rule for the one address and port.
+    public var networkPrefix: Int?
+    /// With `portScope` `.thisPort`: these ports, the connection's among them, rather than the one.
+    public var portRange: PortRange?
 
     public init(
         action: RuleAction, processScope: ProcessScope = .thisProcess, remoteScope: RemoteScope = .host,
-        portScope: PortScope = .thisPort, duration: Duration = .forever, allUsers: Bool = true, activeProfileOnly: Bool = false
+        portScope: PortScope = .thisPort, duration: Duration = .forever, allUsers: Bool = true, activeProfileOnly: Bool = false,
+        networkPrefix: Int? = nil, portRange: PortRange? = nil
     ) {
         self.action = action
         self.processScope = processScope
@@ -182,6 +191,47 @@ public struct AlertDecision: Codable, Hashable, Sendable {
         self.duration = duration
         self.allUsers = allUsers
         self.activeProfileOnly = activeProfileOnly
+        self.networkPrefix = networkPrefix
+        self.portRange = portRange
+    }
+
+    /// The rule this answer makes for a connection, lasting forever: the engine sets when it ends.
+    public func rule(
+        process: ProcessIdentity, hostname: String?, address: IPAddress?, port: UInt16, direction: TrafficDirection,
+        userID: UInt32, activeProfile: UUID?
+    ) -> Rule {
+        let remote: RemoteMatch = switch remoteScope {
+        case .host: hostname.map(RemoteMatch.host) ?? address.map { .address($0.description) } ?? .any
+        case .domain(let domain): .domain(domain)
+        case .address: address.map { .address((network(around: $0)?.description) ?? $0.description) } ?? .any
+        case .localNetwork: .localNetwork
+        case .any: .any
+        }
+        let ports: PortMatch = switch portScope {
+        case .anyPort: .any
+        case .thisPort: portRange.flatMap { $0.contains(port) && $0.lower < $0.upper ? .ranges([$0]) : nil } ?? .single(port)
+        }
+        let thisProcess = processScope == .thisProcess
+        return Rule(
+            action: action,
+            process: thisProcess ? .path(process.path) : .any,
+            codeRequirement: thisProcess ? process.designatedRequirement : nil,
+            remote: remote,
+            ports: ports,
+            // Both TCP and UDP: a program reaches the same service over either (HTTPS and HTTP/3,
+            // DNS, games), and a rule for one left the other to ask again.
+            proto: .any,
+            direction: direction == .incoming ? .incoming : .outgoing,
+            userID: allUsers ? nil : userID,
+            profileID: activeProfileOnly ? activeProfile : nil,
+            origin: .alert)
+    }
+
+    /// The network `networkPrefix` asks for around an address. Prefixes that take in whole
+    /// swathes of the internet are ignored: that's what `.any` is for.
+    private func network(around address: IPAddress) -> IPNetwork? {
+        guard let networkPrefix, (address.isIPv4 ? 8...32 : 16...128).contains(networkPrefix) else { return nil }
+        return IPNetwork(address: address, prefixLength: networkPrefix)
     }
 }
 

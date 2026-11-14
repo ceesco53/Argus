@@ -337,3 +337,99 @@ let app = ClientContext(userID: 501, pid: 1, role: .app)
         #expect(core.alertShown(alert.id) == nil)
     }
 }
+
+/// One answer for an app's many nameless servers.
+@Suite struct WiderAnswerTests {
+    func relay(_ address: String, _ port: UInt16) -> FlowContext { flow(host: nil, address: address, port: port, proto: .udp) }
+
+    @Test func aWiderAnswerCoversWaitingAlertsAndReplacesEarlierOnes() async throws {
+        let (core, delegate) = makeCore()
+        // Three relays answered one at a time, the way it used to go.
+        for (address, port) in [("162.254.193.98", UInt16(27031)), ("103.10.124.118", 27018), ("146.66.155.4", 27040)] {
+            _ = core.decide(flowID: UUID(), context: relay(address, port), resume: { _ in })
+            core.resolveAlert(try #require(core.pendingAlerts.first).id, decision: AlertDecision(action: .allow))
+        }
+        let before = core.state.rules
+        let earlier = before.filter { $0.origin == .alert }
+        #expect(earlier.count == 3)
+        // An answer of the user's own for the same app, which no alert may take away.
+        let byHand = Rule(action: .allow, process: .path(unknownApp.path), codeRequirement: unknownApp.designatedRequirement,
+                          remote: .address("208.78.164.10"), ports: .single(27050), notes: "The lobby")
+        _ = await core.handle(.saveRule(byHand), client: app, authorization: nil)
+
+        // Three more arrive together.
+        let released = Locked<[Verdict]>([])
+        for (address, port) in [("155.133.252.87", UInt16(27024)), ("155.133.238.194", 27019), ("185.25.182.20", 27052)] {
+            _ = core.decide(flowID: UUID(), context: relay(address, port), resume: { v in released.withLock { $0.append(v) } })
+        }
+        let waiting = core.pendingAlerts
+        #expect(waiting.count == 3)
+        let alert = try #require(waiting.first { $0.address == "155.133.252.87" })
+        let pattern = try #require(alert.pattern(rules: core.state.rules, waiting: waiting))
+        #expect(pattern == AlertPattern(servers: .any, ports: PortRange(27000, 27099)))
+
+        let decision = AlertDecision(action: .allow, remoteScope: .any, portRange: pattern.ports)
+        let others = Set(waiting.map(\.id)).subtracting([alert.id])
+        #expect(alert.reach(of: decision, state: core.state, waiting: waiting) == AlertReach(alerts: others, rules: 3))
+        #expect(alert.reach(of: AlertDecision(action: .allow), state: core.state, waiting: waiting).isEmpty)
+        var once = decision
+        once.duration = .once
+        #expect(alert.reach(of: once, state: core.state, waiting: waiting).isEmpty)
+        var forAWhile = decision
+        forAWhile.duration = .minutes(15)
+        #expect(alert.reach(of: forAWhile, state: core.state, waiting: waiting) == AlertReach(alerts: others))
+        // A network takes in the neighbour and none of the earlier answers elsewhere.
+        let network = AlertDecision(action: .allow, remoteScope: .address, portScope: .anyPort, networkPrefix: 16)
+        #expect(alert.reach(of: network, state: core.state, waiting: waiting).alerts.count == 1)
+        #expect(alert.reach(of: network, state: core.state, waiting: waiting).rules == 0)
+
+        guard case .ok = await core.handle(.resolveAlert(alert.id, decision), client: app, authorization: nil) else {
+            Issue.record("expected the answer to be accepted")
+            return
+        }
+        #expect(released.current.count == 3) // the two others had their answer too
+        #expect(released.current.allSatisfy { $0.action == .allow })
+        #expect(core.pendingAlerts.isEmpty)
+        let rule = try #require(core.state.rules.last)
+        #expect(rule.remote == .any)
+        #expect(rule.ports == .ranges([PortRange(27000, 27099)]))
+        #expect(rule.process == .path(unknownApp.path))
+        #expect(core.state.rules.filter { $0.origin == .alert }.map(\.id) == [rule.id]) // one rule where there were three
+        #expect(core.state.rules.contains { $0.id == byHand.id })
+        #expect(core.recentChanges.first?.summary == "Allowed from an alert: \(rule.summary), in place of 3 rules it covers")
+
+        // The next relay doesn't ask, and neither does one of the old ones.
+        #expect(core.decide(flowID: UUID(), context: relay("190.217.33.5", 27060), resume: { _ in }) == .allow(Verdict(.allow, .rule(rule.id))))
+        #expect(core.decide(flowID: UUID(), context: relay("162.254.193.98", 27031), resume: { _ in }) == .allow(Verdict(.allow, .rule(rule.id))))
+        #expect(delegate.alerts.current.count == 6)
+        // Other ports still ask.
+        guard case .pause = core.decide(flowID: UUID(), context: relay("190.217.33.5", 443), resume: { _ in }) else {
+            Issue.record("expected an alert for another port")
+            return
+        }
+
+        // Undo puts the three answers back and takes the wider rule away.
+        _ = await core.handle(.undoChange(try #require(core.recentChanges.first).id), client: app, authorization: nil)
+        #expect(Set(core.state.rules.map(\.id)) == Set(before.map(\.id) + [byHand.id]))
+    }
+
+    @Test func aTemporaryAnswerReplacesNothing() async throws {
+        let (core, delegate) = makeCore() // the core holds its delegate weakly; without one nobody is asked
+        defer { withExtendedLifetime(delegate) {} }
+        _ = core.decide(flowID: UUID(), context: relay("162.254.193.98", 27031), resume: { _ in })
+        core.resolveAlert(try #require(core.pendingAlerts.first).id, decision: AlertDecision(action: .allow))
+        let kept = try #require(core.state.rules.last)
+        // A deny doesn't take allows away.
+        _ = core.decide(flowID: UUID(), context: relay("155.133.252.87", 9000), resume: { _ in })
+        core.resolveAlert(try #require(core.pendingAlerts.first).id,
+                          decision: AlertDecision(action: .deny, remoteScope: .address, portScope: .anyPort, networkPrefix: 16))
+        #expect(core.state.rules.last?.remote == .address("155.133.0.0/16"))
+        #expect(core.state.rules.contains { $0.id == kept.id })
+        // Nor does an allow that ends: the earlier answer is still there when the quarter of an hour is up.
+        _ = core.decide(flowID: UUID(), context: relay("146.66.155.4", 27040), resume: { _ in })
+        core.resolveAlert(try #require(core.pendingAlerts.first).id,
+                          decision: AlertDecision(action: .allow, remoteScope: .any, portScope: .anyPort, duration: .minutes(15)))
+        #expect(core.state.rules.last?.remote == .any)
+        #expect(core.state.rules.contains { $0.id == kept.id })
+    }
+}

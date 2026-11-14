@@ -22,6 +22,7 @@ Debug builds accept launch arguments for working on the UI without the filter:
 | `-ArgusDebugTroubleshoot Safari` | Starts Troubleshoot with that app picked |
 | `-ArgusDebugPageCheck YES` | With `-ArgusDebugTroubleshoot`, shows a finished page check on that app's activity (`search` shows a culprit search under way) |
 | `-ArgusDebugAlert YES` | Shows sample connection alerts |
+| `-ArgusDebugAlertRelays YES` | With `-ArgusDebugAlert`, starts with a game's alerts for nameless relays, some of them answered before |
 | `-ArgusDebugMenu YES` | Shows the status menu's content in a normal window |
 | `-ArgusDebugWindowSize 1440x900` | Sizes the main window |
 | `-ArgusDebugDownloadLocation YES` | Downloads the location database at launch |

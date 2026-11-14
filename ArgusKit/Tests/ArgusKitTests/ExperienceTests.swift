@@ -151,6 +151,93 @@ import Testing
         #expect(issues[deny.id] == nil)
         #expect(issues[other.id] == nil) // a port makes it narrower, so it can win
     }
+
+    func answer(_ remote: RemoteMatch, _ ports: PortMatch = .single(27024), _ action: RuleAction = .allow, origin: RuleOrigin = .alert) -> Rule {
+        Rule(action: action, process: .path(unknownApp.path), codeRequirement: unknownApp.designatedRequirement, remote: remote,
+             ports: ports, origin: origin)
+    }
+
+    @Test func findsRulesABroaderRuleCovers() {
+        let relays = (1...3).map { answer(.address("155.133.252.\($0)"), .single(27020 + UInt16($0))) }
+        let elsewhere = answer(.address("155.133.252.9"), .single(443))
+        let named = answer(.host("api.example.com"), .single(27024))
+        let stretch = answer(.any, .ranges([PortRange(27000, 27099)]))
+        let rules = relays + [elsewhere, named, stretch]
+        let issues = RuleAnalysis.issues(in: rules)
+        for relay in relays { #expect(issues[relay.id] == .covered(by: stretch.id)) }
+        #expect(issues[named.id] == .covered(by: stretch.id))
+        #expect(issues[elsewhere.id] == nil) // another port
+        #expect(issues[stretch.id] == nil)
+        #expect(issues.values.allSatisfy { $0.isRedundant })
+        #expect(Set(RuleAnalysis.answersReplaced(by: stretch, in: rules)) == Set(relays.map(\.id) + [named.id]))
+
+        // A network covers its addresses, a domain its hosts, and a host on any port the host on one.
+        let network = answer(.address("155.133.0.0/16"), .any)
+        #expect(RuleAnalysis.issues(in: [relays[0], network, answer(.address("162.254.193.98"))]) == [relays[0].id: .covered(by: network.id)])
+        let domain = answer(.domain("example.com"))
+        #expect(RuleAnalysis.issues(in: [named, domain, answer(.host("api.example.org"))]) == [named.id: .covered(by: domain.id)])
+        let everyPort = answer(.host("api.example.com"), .any)
+        #expect(RuleAnalysis.issues(in: [named, everyPort]) == [named.id: .covered(by: everyPort.id)])
+    }
+
+    @Test func aCoveredRuleStaysWhileItMakesADifference() {
+        let relay = answer(.address("155.133.252.1"))
+        let anywhere = answer(.any, .any)
+        #expect(RuleAnalysis.issues(in: [relay, anywhere])[relay.id] == .covered(by: anywhere.id))
+        func stays(_ rules: [Rule], alongside others: [Rule] = []) -> Bool {
+            RuleAnalysis.issues(in: rules, alongside: others)[relay.id] == nil
+                && !RuleAnalysis.answersReplaced(by: anywhere, in: rules, alongside: others).contains(relay.id)
+        }
+        // A deny between the two would decide once the relay's rule is gone: for its network, or
+        // from a rule group, or for a helper Argus files under the app.
+        #expect(stays([relay, anywhere, answer(.address("155.133.0.0/16"), .any, .deny)]))
+        #expect(stays([relay, anywhere], alongside: [answer(.address("155.133.0.0/16"), .any, .deny, origin: .ruleGroup(UUID()))]))
+        let helper = unknownApp.path.replacingOccurrences(of: "/Contents/MacOS/Tool", with: "/Contents/Frameworks/Helper.app/Contents/MacOS/Helper")
+        #expect(stays([relay, anywhere, Rule(action: .deny, process: .path(helper), remote: .address("155.133.252.0/24"))]))
+        // A deny that can't touch it changes nothing: another server, another app, or every app
+        // (which any rule for this app outranks).
+        for deny in [answer(.address("162.254.0.0/16"), .any, .deny), Rule(action: .deny, process: .path(safari.path), remote: .address("155.133.0.0/16")),
+                     Rule(action: .deny, remote: .address("155.133.0.0/16"))] {
+            #expect(!stays([relay, anywhere, deny]))
+        }
+        // The broader rule has to last, apply wherever the narrow one does, and check the same signature.
+        var temporary = anywhere
+        temporary.expiration = .date(Date().addingTimeInterval(900))
+        var oneProfile = anywhere
+        oneProfile.profileID = UUID()
+        var oneUser = anywhere
+        oneUser.userID = 502
+        var unsigned = anywhere
+        unsigned.codeRequirement = nil
+        var off = anywhere
+        off.isEnabled = false
+        var incoming = anywhere
+        incoming.direction = .incoming
+        for broader in [temporary, oneProfile, oneUser, unsigned, off, incoming, answer(.any, .any, .deny)] {
+            #expect(RuleAnalysis.issues(in: [relay, broader])[relay.id] == nil)
+            #expect(RuleAnalysis.answersReplaced(by: broader, in: [relay]).isEmpty)
+        }
+        // A temporary narrow rule is covered all the same.
+        var untilRestart = relay
+        untilRestart.expiration = .untilRestart(bootSession: "x")
+        #expect(RuleAnalysis.answersReplaced(by: anywhere, in: [untilRestart]) == [relay.id])
+    }
+
+    @Test func onlyPlainAlertAnswersAreReplaced() {
+        let anywhere = answer(.any, .any)
+        let byHand = answer(.address("155.133.252.1"), origin: .user)
+        var annotated = answer(.address("155.133.252.2"))
+        annotated.notes = "the relay in Stockholm"
+        let plain = answer(.address("155.133.252.3"))
+        #expect(RuleAnalysis.answersReplaced(by: anywhere, in: [byHand, annotated, plain, anywhere]) == [plain.id])
+        // Rules still points the others out.
+        #expect(Set(RuleAnalysis.issues(in: [byHand, annotated, plain, anywhere]).keys) == [byHand.id, annotated.id, plain.id])
+        // Rules for every program are left alone: a blocklist entry could rank between them.
+        let everyApp = Rule(action: .allow, remote: .any, origin: .alert)
+        let oneServer = Rule(action: .allow, remote: .host("api.example.com"), origin: .alert)
+        #expect(RuleAnalysis.issues(in: [everyApp, oneServer]).isEmpty)
+        #expect(RuleAnalysis.answersReplaced(by: everyApp, in: [oneServer]).isEmpty)
+    }
 }
 
 @Suite struct BatchTests {

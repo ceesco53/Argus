@@ -106,6 +106,25 @@ public enum PortMatch: Codable, Hashable, Sendable {
     public var isSinglePort: Bool {
         if case .ranges(let r) = self, r.count == 1, r[0].lower == r[0].upper { true } else { false }
     }
+
+    /// Whether every port `other` matches is one of these.
+    public func covers(_ other: PortMatch) -> Bool {
+        switch (self, other) {
+        case (.any, _): true
+        case (.ranges, .any): false
+        case (.ranges(let mine), .ranges(let theirs)):
+            theirs.allSatisfy { range in mine.contains { $0.lower <= range.lower && range.upper <= $0.upper } }
+        }
+    }
+
+    /// Whether some port is matched by both.
+    public func overlaps(_ other: PortMatch) -> Bool {
+        switch (self, other) {
+        case (.any, _), (_, .any): true
+        case (.ranges(let mine), .ranges(let theirs)):
+            mine.contains { range in theirs.contains { $0.lower <= range.upper && range.lower <= $0.upper } }
+        }
+    }
 }
 
 public enum ProtocolMatch: String, Codable, Sendable, CaseIterable {

@@ -678,18 +678,23 @@ final class AppModel {
 
     /// Answers an alert, and optionally others from the same app with the same kind of answer
     /// (a whole-domain answer becomes each alert's own domain).
-    func resolve(_ alert: ConnectionAlert, with decision: AlertDecision, alsoAnswering others: [ConnectionAlert] = []) async {
+    /// - Parameter offeringUndo: show the undo message for it: the answer replaces earlier rules.
+    func resolve(_ alert: ConnectionAlert, with decision: AlertDecision, alsoAnswering others: [ConnectionAlert] = [],
+                 offeringUndo: Bool = false) async {
         let answered = Set([alert.id] + others.map(\.id))
         alerts.removeAll { answered.contains($0.id) }
         onAlertsChanged?()
+        if offeringUndo { undoToastRequested = Date() }
         await send(decision, to: alert)
         for other in others {
             var adapted = decision
             switch decision.remoteScope {
+            // A network stays a network, around the other alert's own address.
             case .host, .address: adapted.remoteScope = other.hostname == nil ? .address : .host
             case .domain: adapted.remoteScope = .domain(other.suggestedDomain ?? other.hostname ?? "")
             case .any, .localNetwork: break
             }
+            if let range = decision.portRange, !range.contains(other.port) { adapted.portRange = nil }
             await send(adapted, to: other)
         }
     }
@@ -727,6 +732,25 @@ final class AppModel {
             ("/System/Applications/Mail.app/Contents/MacOS/Mail", "smtp.example.org", "203.0.113.11"),
             ("/System/Applications/Music.app/Contents/MacOS/Music", "cdn.example.net", "203.0.113.20"),
         ]
+        // A game reaching relay after relay: nameless servers on a stretch of ports, some answered before.
+        let game = ProcessIdentity(path: "/Applications/Example Game.app/Contents/MacOS/game", name: "game", signature: .developerID)
+        if UserDefaults.standard.bool(forKey: "ArgusDebugAlertRelays") {
+            let relays: [(String, UInt16)] = [("155.133.252.87", 27024), ("162.254.193.98", 27031), ("103.10.124.118", 27018),
+                                              ("162.254.197.36", 27045), ("146.66.155.4", 27040), ("185.25.182.20", 27052)]
+            for (address, port) in relays {
+                let id = UUID()
+                sampleAlertIDs.insert(id)
+                alerts.append(ConnectionAlert(
+                    id: id, createdAt: Date(), deadline: Date().addingTimeInterval(state.settings.alertTimeout), process: game, via: nil,
+                    pid: 1, userID: getuid(), hostname: nil, address: address, port: port, proto: .udp,
+                    direction: .outgoing, pendingConnections: 1, signatureWarning: nil))
+            }
+            let earlier = (1...12).map { index in
+                Rule(action: .allow, process: .path(game.path), remote: .address("208.78.164.\(index)"), ports: .single(27015 + UInt16(index)), origin: .alert)
+            }
+            // Made-up rules belong in the demo's engine only, never in the real configuration.
+            if DebugLaunch.demo { Task { await perform(.saveRules(earlier)) } }
+        }
         for (path, host, address) in samples {
             let process = CodeSignature.identity(path: path)
             let context = FlowContext(process: process, hostname: host, address: IPAddress(address), remotePort: 443)
