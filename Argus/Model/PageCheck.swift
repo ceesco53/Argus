@@ -31,6 +31,10 @@ struct PageCheck: Equatable {
     var site: URL?
     /// Whether Argus reloaded the page itself (false: the user has to).
     var reloadedByArgus = false
+    /// A page in the browser has been using a whole processor core for a while: stuck in its own
+    /// script. Reloading doesn't help (the page loads again in the same stuck process), and while
+    /// it's stuck it never asks for what else it needs, so the check can't see that.
+    var pageStuck = false
     var entries: [FlowLogEntry] = []
     /// Temporary rules made from this check, by server.
     var trials: [String: UUID] = [:]
@@ -103,11 +107,34 @@ enum BrowserScripting {
 
     static func canScript(_ target: PageCheck.Target) -> Bool { script(for: target, reload: false) != nil }
 
-    private static func script(for target: PageCheck.Target, reload: Bool) -> String? {
+    /// Opens the front tab's page in a new tab and closes the old one, whose page may be stuck
+    /// (a stuck page reloads in the same stuck process). False when Argus couldn't.
+    static func reopenFrontTab(of target: PageCheck.Target) async -> Bool {
+        guard let id = scriptableID(of: target), let scripting = target.browser?.scripting else { return false }
+        let tab = scripting == .safari ? "current tab" : "active tab"
+        let select = scripting == .safari ? "set current tab of front window to newTab" : ""
+        return await run("""
+        tell application id "\(id)"
+            set oldTab to \(tab) of front window
+            set theURL to URL of oldTab
+            set newTab to make new tab at end of tabs of front window with properties {URL:theURL}
+            \(select)
+            close oldTab
+        end tell
+        return "ok"
+        """) != nil
+    }
+
+    private static func scriptableID(of target: PageCheck.Target) -> String? {
         // The demo's browsers are made up: never script the real ones.
-        guard !DebugLaunch.demo, let id = target.bundleIdentifier, let scripting = target.browser?.scripting,
+        guard !DebugLaunch.demo, let id = target.bundleIdentifier, target.browser?.scripting != nil,
               id.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" }),
               !NSRunningApplication.runningApplications(withBundleIdentifier: id).isEmpty else { return nil }
+        return id
+    }
+
+    private static func script(for target: PageCheck.Target, reload: Bool) -> String? {
+        guard let id = scriptableID(of: target), let scripting = target.browser?.scripting else { return nil }
         switch (scripting, reload) {
         case (.safari, false):
             return "tell application id \"\(id)\" to get URL of current tab of front window"

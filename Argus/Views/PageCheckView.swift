@@ -56,6 +56,7 @@ struct PageCheckCard: View {
         let allowed = rows.filter { !($0.wasBlocked || model.pageCheckTrial($0.host) != nil) }
         return VStack(alignment: .leading, spacing: 12) {
             status(check, rows: rows)
+            if check.pageStuck { StuckPageBanner(check: check) }
             if check.search != nil { CulpritSearchPanel(check: check) }
             if rows.isEmpty {
                 Text("Nothing yet.").foregroundStyle(.tertiary)
@@ -111,7 +112,8 @@ struct PageCheckCard: View {
                         }
                     }
                     Spacer()
-                    Button(BrowserScripting.canScript(check.target) ? "Reload and Check Again" : "Check Again") {
+                    Button(!BrowserScripting.canScript(check.target) ? "Check Again"
+                           : check.pageStuck ? "Reopen and Check Again" : "Reload and Check Again") {
                         Task { await model.reloadPageCheck() }
                     }
                 }
@@ -227,6 +229,34 @@ private struct PageCheckRowView: View {
     }
 }
 
+/// A page in the checked browser is stuck in its own script, so reloading it shows nothing new.
+private struct StuckPageBanner: View {
+    @Environment(AppModel.self) private var model
+    let check: PageCheck
+
+    var body: some View {
+        let name = check.target.name
+        let scriptable = BrowserScripting.canScript(check.target)
+        VStack(alignment: .leading, spacing: 8) {
+            Label("A \(name) page looks stuck", systemImage: "exclamationmark.triangle.fill")
+                .font(.headline)
+                .foregroundStyle(.orange)
+            Text("It has been using a whole processor core: its script is stuck in a loop, often because a server it needs was blocked. Reloading doesn't help, since the page loads again in the same stuck process and never asks for the rest of what it needs. "
+                 + (scriptable ? "Argus opens it in a new tab instead of reloading it." : "Close its tab and open the page in a new one."))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if scriptable {
+                Button("Reopen in New Tab") { Task { await model.reloadPageCheck() } }
+                    .controlSize(.small)
+                    .help("Close the front tab in \(name) and open its page in a new one")
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
 /// Step-by-step: let half of the suspects through, reload, ask whether the page works.
 private struct CulpritSearchPanel: View {
     @Environment(AppModel.self) private var model
@@ -251,7 +281,9 @@ private struct CulpritSearchPanel: View {
         let name = check.target.name
         let count = search.testing.count
         return VStack(alignment: .leading, spacing: 8) {
-            Text(search.step == 1 ? "Test 1: letting everything Argus blocked through" : "Test \(search.step): letting \(count) of \(search.suspects.count) suspects through")
+            Text(search.step == 1 ? "Test 1: letting everything Argus blocked through"
+                 : search.isTestingEverything ? "Test \(search.step): the page asked for more, so letting all \(count) through"
+                 : "Test \(search.step): letting \(count) of \(search.suspects.count) suspects through")
                 .font(.headline)
             Text(search.testing.joined(separator: ", "))
                 .font(.caption)
@@ -263,7 +295,7 @@ private struct CulpritSearchPanel: View {
                     .buttonStyle(.borderedProminent)
                 Button("Still Broken") { Task { await model.answerCulpritTest(pageWorked: false) } }
                 if BrowserScripting.canScript(check.target) {
-                    Button("Reload Again") { Task { await model.reloadPageCheck() } }
+                    Button(check.pageStuck ? "Reopen Again" : "Reload Again") { Task { await model.reloadPageCheck() } }
                 }
                 Spacer()
                 Button("Stop") { Task { await model.endCulpritSearch() } }
@@ -299,7 +331,9 @@ private struct CulpritSearchPanel: View {
     private var notArgus: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("Argus isn't what breaks this page", systemImage: "info.circle.fill").font(.headline)
-            Text("Even with everything Argus blocked let through, the page still didn't work, so the problem is probably elsewhere. Pause protection for a few minutes to be sure.")
+            Text("Even with everything Argus blocked let through, the page still didn't work, so the problem is probably elsewhere. "
+                 + (check.pageStuck ? "Its page is stuck, though: close the tab, open the page in a new one with protection paused, and see whether it loads."
+                                    : "Pause protection for a few minutes to be sure."))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {

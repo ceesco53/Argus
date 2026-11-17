@@ -3,9 +3,11 @@ import Foundation
 /// Narrows down which of the servers Argus blocked a page actually needs, by letting some of them
 /// through, reloading, and asking whether the page works.
 ///
-/// First everything blocked is let through, to make sure Argus is the cause at all. Then half of
-/// the suspects at a time: if the page works with one half, the culprit is in it; if it works
-/// with neither half alone, it needs servers from both and the search stops there.
+/// First everything blocked is let through, to make sure Argus is the cause at all. A page that
+/// gets further that way may ask for more that Argus blocks, so those join the test until nothing
+/// new turns up. Then half of the suspects at a time: if the page works with one half, the culprit
+/// is in it; if it works with neither half alone, it needs servers from both and the search stops
+/// there.
 public struct CulpritSearch: Sendable, Equatable {
     public enum Outcome: Sendable, Equatable {
         /// Letting these through makes the page work.
@@ -25,6 +27,9 @@ public struct CulpritSearch: Sendable, Equatable {
     public private(set) var step = 1
     private var stage = Stage.everything
 
+    /// Whether the current test lets through everything Argus blocked (as opposed to some suspects).
+    public var isTestingEverything: Bool { outcome == nil && stage == .everything }
+
     /// nil when nothing was blocked, so there's nothing to search.
     public init?(blocked: [String]) {
         var seen = Set<String>()
@@ -34,14 +39,21 @@ public struct CulpritSearch: Sendable, Equatable {
         testing = unique
     }
 
-    /// Whether the page worked with `testing` let through.
-    public mutating func record(pageWorked: Bool) {
+    /// Whether the page worked with `testing` let through. `newlyBlocked`: servers Argus blocked
+    /// during the test that weren't suspects yet.
+    public mutating func record(pageWorked: Bool, newlyBlocked: [String] = []) {
         guard outcome == nil else { return }
         step += 1
         switch stage {
         case .everything:
+            var seen = Set(suspects)
+            let more = newlyBlocked.filter { seen.insert($0).inserted }
             if pageWorked {
                 narrow()
+            } else if !more.isEmpty {
+                // The page got further and asked for more: let that through too before ruling Argus out.
+                suspects += more
+                testing = suspects
             } else {
                 outcome = .notArgus
                 testing = []

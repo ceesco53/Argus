@@ -106,6 +106,8 @@ final class AppModel {
     var troubleshootAppPath: String?
     /// What an app (usually a browser reloading a page) connects to right now; see `PageCheck`.
     var pageCheck: PageCheck?
+    /// Watches the checked browser's page processes for one stuck in its own script.
+    @ObservationIgnored var stuckPageWatch: Task<Void, Never>?
     /// What kind of server each host is (advertising, anti-adblock…), as the engine classified it.
     var hostInfo: [String: HostInfo] = [:]
     /// Connections Argus decided on its own during the current busy spell.

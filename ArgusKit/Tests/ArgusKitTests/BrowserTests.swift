@@ -153,6 +153,81 @@ enum Chrome {
         #expect(CulpritSearch(blocked: []) == nil)
         #expect(CulpritSearch(blocked: ["a", "a"])?.suspects == ["a"])
     }
+
+    /// bmo.com: the first recording only saw its trackers; the server it needed was asked for only
+    /// once the page got further, so ruling Argus out after the first test was wrong.
+    @Test func serversBlockedDuringTheFirstTestJoinIt() throws {
+        var search = try #require(CulpritSearch(blocked: ["smetrics.bmo.com", "d.adroll.com"]))
+        search.record(pageWorked: false, newlyBlocked: ["d.adroll.com", "content22.bmo.com", "content22.bmo.com"])
+        #expect(search.outcome == nil && search.isTestingEverything)
+        #expect(search.testing == ["smetrics.bmo.com", "d.adroll.com", "content22.bmo.com"])
+        #expect(search.step == 2)
+        search.record(pageWorked: true)
+        #expect(!search.isTestingEverything && search.testing.count == 1)
+        while search.outcome == nil { search.record(pageWorked: search.testing.contains("content22.bmo.com")) }
+        #expect(search.outcome == .found(["content22.bmo.com"]))
+    }
+
+    @Test func nothingNewMeansNotArgus() throws {
+        var search = try #require(CulpritSearch(blocked: ["a"]))
+        search.record(pageWorked: false, newlyBlocked: ["a"])
+        #expect(search.outcome == .notArgus && !search.isTestingEverything)
+    }
+
+    @Test func serversBlockedDuringAHalfTestDontChangeIt() throws {
+        var search = try #require(CulpritSearch(blocked: ["a", "b"]))
+        search.record(pageWorked: true)
+        #expect(search.testing == ["a"])
+        search.record(pageWorked: false, newlyBlocked: ["c"])
+        #expect(search.testing == ["b"] && search.suspects == ["a", "b"])
+    }
+}
+
+@Suite struct StuckPageTests {
+    @Test func flatOutForLongEnoughIsStuck() {
+        var watch = StuckPageWatch()
+        watch.record(at: 100, cpu: [1: 50, 2: 10])
+        watch.record(at: 102, cpu: [1: 52, 2: 10.1]) // 1 flat out, 2 idle
+        #expect(watch.stuck.isEmpty)
+        watch.record(at: 104, cpu: [1: 53.9, 2: 10.2])
+        #expect(watch.stuck.isEmpty) // flat out for 4 s
+        watch.record(at: 106, cpu: [1: 55.8, 2: 10.3])
+        #expect(watch.stuck == [1])
+    }
+
+    @Test func aBreakStartsOver() {
+        var watch = StuckPageWatch()
+        watch.record(at: 0, cpu: [1: 0])
+        watch.record(at: 4, cpu: [1: 4])
+        watch.record(at: 6, cpu: [1: 4.5]) // a breather
+        watch.record(at: 10, cpu: [1: 8.5])
+        #expect(watch.stuck.isEmpty)
+        watch.record(at: 12, cpu: [1: 10.5])
+        #expect(watch.stuck == [1])
+    }
+
+    @Test func goneOrNewProcessesArentStuck() {
+        var watch = StuckPageWatch()
+        watch.record(at: 0, cpu: [1: 0])
+        watch.record(at: 8, cpu: [1: 8])
+        #expect(watch.stuck == [1])
+        watch.record(at: 10, cpu: [2: 100]) // the tab closed; a new one starts with history
+        #expect(watch.stuck.isEmpty)
+        watch.record(at: 10, cpu: [2: 100]) // a clock that didn't move doesn't count
+        #expect(watch.stuck.isEmpty)
+    }
+
+    @Test func pageProcesses() {
+        #expect(PageProcesses.isPageProcess(path: "/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent"))
+        #expect(PageProcesses.isPageProcess(path: "/x/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer)"))
+        #expect(!PageProcesses.isPageProcess(path: "/x/Google Chrome Helper (GPU).app/Contents/MacOS/Google Chrome Helper (GPU)"))
+        #expect(!PageProcesses.isPageProcess(path: "/x/com.apple.WebKit.Networking"))
+    }
+
+    @Test func cpuTimeOfThisProcess() throws {
+        let time = try #require(ProcessLookup.cpuTime(pid: getpid()))
+        #expect(time > 0 && time < 3600)
+    }
 }
 
 /// Safari as Argus sees it, bundle identifier and all.

@@ -20,7 +20,7 @@ Debug builds accept launch arguments for working on the UI without the filter:
 | `-ArgusDebugSheet digest` | Opens a sheet on top (`review`, `digest`, `changes`) |
 | `-ArgusDebugSearch doubleclick` | Starts the Network Monitor with that search |
 | `-ArgusDebugTroubleshoot Safari` | Starts Troubleshoot with that app picked |
-| `-ArgusDebugPageCheck YES` | With `-ArgusDebugTroubleshoot`, shows a finished page check on that app's activity (`search` shows a culprit search under way) |
+| `-ArgusDebugPageCheck YES` | With `-ArgusDebugTroubleshoot`, shows a finished page check on that app's activity (`search` shows a culprit search under way; `stuck` one whose page is stuck) |
 | `-ArgusDebugAlert YES` | Shows sample connection alerts |
 | `-ArgusDebugAlertRelays YES` | With `-ArgusDebugAlert`, starts with a game's alerts for nameless relays, some of them answered before |
 | `-ArgusDebugMenu YES` | Shows the status menu's content in a normal window |

@@ -41,6 +41,26 @@ public enum ProcessLookup {
         return owner > 0 ? owner : nil
     }
 
+    /// Processor time (user and system) the process has used so far, in seconds. Works for the
+    /// caller's own processes without privileges.
+    public static func cpuTime(pid: Int32) -> TimeInterval? {
+        guard pid > 0 else { return nil }
+        var info = rusage_info_v2()
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(pid, RUSAGE_INFO_V2, $0) }
+        }
+        guard result == 0 else { return nil }
+        // In Mach time units, which aren't nanoseconds on Apple silicon.
+        let ticks = Double(info.ri_user_time + info.ri_system_time)
+        return ticks * Double(timebase.numer) / Double(timebase.denom) / 1_000_000_000
+    }
+
+    private static let timebase: mach_timebase_info_data_t = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return info
+    }()
+
     public static func allPIDs() -> [Int32] {
         let estimate = proc_listallpids(nil, 0)
         guard estimate > 0 else { return [] }

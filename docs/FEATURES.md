@@ -84,7 +84,8 @@
   when the app in front was blocked. **Check a page**: Argus reloads it (asking the browser, with your
   permission) and lists everything it connects to and what was blocked by which list or rule. Let
   anything through, or block it, for 15 minutes and keep what works, or let Argus find what the page
-  needs by letting half of the blocked servers through at a time. **Health checks** notice when DNS or
+  needs by letting half of the blocked servers through at a time. A page stuck in its own script is
+  noticed and opened in a new tab instead of reloaded, since reloading leaves it stuck. **Health checks** notice when DNS or
   the internet stops working, say whether Argus is the cause, and pause it while you sign in to hotel
   or airport Wi-Fi.
 - **Desktop widgets**, **Control Center** controls (macOS 26), and **Siri and Shortcuts** actions.

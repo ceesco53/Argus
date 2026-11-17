@@ -63,6 +63,7 @@ extension AppModel {
         troubleshootAppPath = target.path
         let check = PageCheck(target: target, started: Date(), recordingEnds: Date().addingTimeInterval(PageCheck.recordingTime))
         pageCheck = check
+        watchForStuckPage(check)
         guard BrowserScripting.canScript(target) else { return }
         let site = await BrowserScripting.frontTabURL(of: target)
         guard pageCheck?.id == check.id else { return }
@@ -70,12 +71,14 @@ extension AppModel {
         await reloadPageCheck()
     }
 
-    /// Records for a while longer and asks the browser to reload (when Argus may).
+    /// Records for a while longer and asks the browser to reload (when Argus may). A stuck page
+    /// would only reload in the same stuck process, so it's opened in a new tab instead.
     func reloadPageCheck() async {
         guard let check = pageCheck else { return }
         pageCheck?.recordingEnds = Date().addingTimeInterval(PageCheck.recordingTime)
         guard BrowserScripting.canScript(check.target) else { return }
-        let reloaded = await BrowserScripting.reloadFrontTab(of: check.target)
+        let reloaded = check.pageStuck ? await BrowserScripting.reopenFrontTab(of: check.target)
+                                       : await BrowserScripting.reloadFrontTab(of: check.target)
         if pageCheck?.id == check.id { pageCheck?.reloadedByArgus = reloaded }
     }
 
@@ -86,7 +89,33 @@ extension AppModel {
     /// Closes the check. Changes tried from it stay until they run out by themselves.
     func closePageCheck() async {
         await endCulpritSearch()
+        stuckPageWatch?.cancel()
+        stuckPageWatch = nil
         pageCheck = nil
+    }
+
+    /// While a browser's page is checked, looks every couple of seconds for one of its page
+    /// processes stuck using a whole processor core (see `PageCheck.pageStuck`).
+    private func watchForStuckPage(_ check: PageCheck) {
+        stuckPageWatch?.cancel()
+        stuckPageWatch = nil
+        guard check.target.isBrowser, !DebugLaunch.demo else { return }
+        let target = check.target
+        stuckPageWatch = Task { [weak self] in
+            var watch = StuckPageWatch()
+            while !Task.isCancelled {
+                let owners = Set(NSWorkspace.shared.runningApplications.filter { app in
+                    if let bundle = target.bundlePath { return app.bundleURL?.path == bundle }
+                    return app.bundleIdentifier == target.bundleIdentifier
+                }.map(\.processIdentifier))
+                let sample = await Task.detached(priority: .utility) { PageProcesses.cpuTimes(workingFor: owners) }.value
+                watch.record(at: ProcessInfo.processInfo.systemUptime, cpu: sample)
+                guard let self, self.pageCheck?.id == check.id else { return }
+                let stuck = !watch.stuck.isEmpty
+                if self.pageCheck?.pageStuck != stuck { self.pageCheck?.pageStuck = stuck }
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
     }
 
     /// Adds the app's new decisions to a running check.
@@ -185,8 +214,8 @@ extension AppModel {
 
     #if DEBUG
     /// A finished check on the demo's activity (`-ArgusDebugPageCheck YES`, or `search` to show a
-    /// culprit search under way), for working on its design.
-    func showSamplePageCheck(searching: Bool) {
+    /// culprit search under way; `stuck` with its page stuck too), for working on its design.
+    func showSamplePageCheck(searching: Bool, stuck: Bool = false) {
         guard let path = troubleshootAppPath, let target = pageCheckTarget(appPath: path) else { return }
         // The demo loads a page just before launch (see DemoEngine.loadPage).
         let site = DemoEngine.pageCheckSite
@@ -195,6 +224,7 @@ extension AppModel {
         check.entries = log.filter { $0.processPath == path && $0.date >= start && $0.date < start.addingTimeInterval(10) }
         check.site = URL(string: "https://\(site)/today")
         if searching { check.search = CulpritSearch(blocked: check.blockedHosts) }
+        check.pageStuck = stuck
         pageCheck = check
     }
     #endif
@@ -202,18 +232,22 @@ extension AppModel {
     // MARK: Finding the culprit
 
     func startCulpritSearch() async {
-        guard let check = pageCheck else { return }
-        // Anti-adblock servers are the usual culprits, so they go in the first half tested.
-        let suspects = check.blockedHosts.filter { AntiAdblock.service(for: $0) != nil } + check.blockedHosts.filter { AntiAdblock.service(for: $0) == nil }
-        guard let search = CulpritSearch(blocked: suspects) else { return }
+        guard let check = pageCheck, let search = CulpritSearch(blocked: Self.antiAdblockFirst(check.blockedHosts)) else { return }
         pageCheck?.search = search
         await applyCulpritTest()
     }
 
+    /// Anti-adblock servers are the usual culprits, so they go in the first half tested.
+    private static func antiAdblockFirst(_ hosts: [String]) -> [String] {
+        hosts.filter { AntiAdblock.service(for: $0) != nil } + hosts.filter { AntiAdblock.service(for: $0) == nil }
+    }
+
     /// The user's answer: did the page work with this test's servers let through?
     func answerCulpritTest(pageWorked: Bool) async {
-        guard var search = pageCheck?.search else { return }
-        search.record(pageWorked: pageWorked)
+        guard let check = pageCheck, var search = check.search else { return }
+        // Blocked during this test and not suspects yet: the page got further and asked for more.
+        let newlyBlocked = check.blockedHosts.filter { !search.suspects.contains($0) }
+        search.record(pageWorked: pageWorked, newlyBlocked: Self.antiAdblockFirst(newlyBlocked))
         pageCheck?.search = search
         await applyCulpritTest()
     }
