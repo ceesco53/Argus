@@ -216,6 +216,7 @@ private struct NotificationSettings: View {
     @AppStorage("notifyForegroundBlocks") private var foregroundBlocks = true
     @AppStorage("notifyWarnings") private var warnings = true
     @AppStorage("weeklyReport") private var weeklyReport = true
+    @AppStorage(BlockedNotices.defaultsKey) private var noticesData = Data()
 
     var body: some View {
         Form {
@@ -224,6 +225,8 @@ private struct NotificationSettings: View {
                     Text("When Argus blocks the app I'm using")
                     Text("So you know right away when a block might be why something isn't working.")
                 }
+                mutedNotices
+                    .disabled(!foregroundBlocks)
                 Toggle(isOn: $warnings) {
                     Text("Security warnings")
                     Text("Packet sniffers, changed code signatures, failed blocklist updates and heavy data use.")
@@ -247,6 +250,49 @@ private struct NotificationSettings: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+extension NotificationSettings {
+    /// Servers muted from "Argus blocked …" notifications, with a way to hear about them again.
+    @ViewBuilder
+    var mutedNotices: some View {
+        let muted = BlockedNotices(data: noticesData).muted.sorted { ($0.appName, $0.host) < ($1.appName, $1.host) }
+        if muted.isEmpty {
+            LabeledContent("Muted notifications") {
+                Text("None").foregroundStyle(.secondary)
+            }
+            .help("When a notification names servers it named more than \(BlockedNotices.muteOfferedAfter) times before, it offers Don't Notify About These Again.")
+        } else {
+            DisclosureGroup {
+                ForEach(muted) { notice in
+                    LabeledContent {
+                        Button("Unmute") { change { $0.unmute(notice) } }
+                            .controlSize(.small)
+                    } label: {
+                        Text(notice.host)
+                        Text("\(notice.appName) · muted \(notice.date.formatted(date: .abbreviated, time: .omitted))")
+                    }
+                }
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Muted notifications")
+                        Text("\(muted.count) server\(muted.count == 1 ? "" : "s") you asked not to hear about again. Argus still blocks them.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Reset Muted Notifications") { change { $0.unmuteAll() } }
+                }
+            }
+        }
+    }
+
+    private func change(_ edit: (inout BlockedNotices) -> Void) {
+        var notices = BlockedNotices(data: noticesData)
+        edit(&notices)
+        noticesData = notices.data
     }
 }
 

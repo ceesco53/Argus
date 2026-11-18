@@ -270,3 +270,46 @@ import Testing
         #expect(SyncSafety.needsConfirmation(removing: 6, of: 10))
     }
 }
+
+@Suite struct BlockedNoticeTests {
+    static let safari = "com.apple.Safari"
+
+    @Test func muteIsOfferedAfterTheThirdTime() {
+        var notices = BlockedNotices()
+        func record(_ app: String = BlockedNoticeTests.safari, _ hosts: [String] = ["www.google-analytics.com"]) -> Bool {
+            notices.record(app: app, hosts: hosts)
+        }
+        let first3 = (1...3).map { _ in record() }
+        #expect(first3 == [false, false, false])
+        let fourth = record()
+        #expect(fourth)
+        // Every server in the notice has to have come up that often.
+        let mixed = record(Self.safari, ["www.google-analytics.com", "new.example.com"])
+        #expect(!mixed)
+        // Per app.
+        let chrome = record("com.google.Chrome")
+        #expect(!chrome)
+    }
+
+    @Test func mutedServersDropOutOfNotices() {
+        var notices = BlockedNotices()
+        notices.mute(app: Self.safari, appName: "Safari", hosts: ["WWW.Google-Analytics.com", "www.google-analytics.com"])
+        #expect(notices.muted.count == 1)
+        #expect(notices.unmuted(["www.google-analytics.com", "bat.bing.com"], app: Self.safari) == ["bat.bing.com"])
+        #expect(notices.unmuted(["www.google-analytics.com"], app: "com.google.Chrome") == ["www.google-analytics.com"])
+        notices.unmute(notices.muted[0])
+        #expect(!notices.isMuted(app: Self.safari, host: "www.google-analytics.com"))
+        notices.mute(app: Self.safari, appName: "Safari", hosts: ["a.com", "b.com"])
+        notices.unmuteAll()
+        #expect(notices.muted.isEmpty)
+    }
+
+    @Test func survivesBeingSaved() {
+        var notices = BlockedNotices()
+        notices.record(app: Self.safari, hosts: ["a.com"])
+        notices.mute(app: Self.safari, appName: "Safari", hosts: ["a.com"], at: Date(timeIntervalSince1970: 1_000_000))
+        #expect(BlockedNotices(data: notices.data) == notices)
+        #expect(BlockedNotices(data: nil) == BlockedNotices())
+        #expect(BlockedNotices(data: Data("junk".utf8)) == BlockedNotices())
+    }
+}

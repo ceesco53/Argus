@@ -81,7 +81,8 @@
 
 - **Menu bar** status with live traffic, recently blocked connections (allow in one click) and what's active.
 - **Troubleshooter**: pick an app to see what was blocked and why, check any website, and get notified
-  when the app in front was blocked. **Check a page**: Argus reloads it (asking the browser, with your
+  when the app in front was blocked (once a server has come up more than three times, the notification
+  offers to stop mentioning it for that app; Settings → Notifications lists and resets those). **Check a page**: Argus reloads it (asking the browser, with your
   permission) and lists everything it connects to and what was blocked by which list or rule. Let
   anything through, or block it, for 15 minutes and keep what works, or let Argus find what the page
   needs by letting half of the blocked servers through at a time. A page stuck in its own script is

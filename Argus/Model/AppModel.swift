@@ -1004,7 +1004,8 @@ final class AppModel {
         guard let first = blocked.first else { return }
         var seen = Set<String>()
         let hosts = blocked.map(\.remote).filter { seen.insert($0).inserted }
-        notifier.blocked(appName: app.localizedName ?? first.processName, appPath: first.processPath, hosts: hosts)
+        notifier.blocked(app: app.bundleIdentifier ?? app.bundleURL?.path ?? first.processPath,
+                         appName: app.localizedName ?? first.processName, appPath: first.processPath, hosts: hosts)
     }
 
     private func perform(_ action: Notifier.Action) {
